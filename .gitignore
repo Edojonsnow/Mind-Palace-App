@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.*.example
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -14,4 +15,3 @@ htmlcov/
 venv/
 dist/
 build/
-
