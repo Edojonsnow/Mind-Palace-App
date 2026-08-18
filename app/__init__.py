@@ -1,0 +1,2 @@
+"""Mind Palace App backend."""
+
