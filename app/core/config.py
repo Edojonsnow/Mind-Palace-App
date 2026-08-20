@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://user:password@localhost:5432/mind_palace"
     neon_auth_jwks_url: str | None = None
     neon_auth_issuer: str | None = None
+    neon_auth_audience: str | None = None
+    backend_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     openai_api_key: str | None = None
     redis_url: str = "redis://localhost:6379/0"
 
@@ -26,6 +28,10 @@ class Settings(BaseSettings):
     @property
     def sqlalchemy_database_url(self) -> str:
         return normalize_database_url(self.database_url)
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.backend_cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

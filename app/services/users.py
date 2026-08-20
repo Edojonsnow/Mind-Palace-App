@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,9 +10,7 @@ def get_or_create_user(db: Session, authenticated_user: AuthenticatedUser) -> Us
     if user is not None:
         return user
 
-    user_id = UUID(authenticated_user.id)
     user = User(
-        id=user_id,
         auth_user_id=authenticated_user.auth_user_id,
         email=authenticated_user.email,
     )
@@ -25,4 +21,3 @@ def get_or_create_user(db: Session, authenticated_user: AuthenticatedUser) -> Us
     db.commit()
     db.refresh(user)
     return user
-

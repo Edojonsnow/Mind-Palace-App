@@ -36,6 +36,30 @@ DATABASE_URL="postgresql://user:password@ep-example.us-east-1.aws.neon.tech/neon
 
 The app normalizes `postgresql://` to SQLAlchemy's Psycopg 3 driver URL internally, so you can paste the Neon URL directly.
 
+Protected API routes expect a Neon Auth access token:
+
+```bash
+Authorization: Bearer <access-token>
+```
+
+Set these auth values in `.env`:
+
+```bash
+NEON_AUTH_JWKS_URL=
+NEON_AUTH_ISSUER=
+NEON_AUTH_AUDIENCE=
+```
+
+For Neon Auth, `NEON_AUTH_ISSUER` is the Auth host origin. Do not append the
+`/neondb/auth` path. The JWKS URL does include that path:
+
+```bash
+NEON_AUTH_ISSUER=https://<auth-host>
+NEON_AUTH_JWKS_URL=https://<auth-host>/neondb/auth/.well-known/jwks.json
+```
+
+`NEON_AUTH_AUDIENCE` is optional. Keep it blank unless the Neon Auth token is issued with a specific audience claim.
+
 See [Database Environments](docs/DATABASE_ENVIRONMENTS.md) for development, staging, and production setup.
 
 Run the API:
@@ -44,10 +68,38 @@ Run the API:
 uvicorn app.main:app --reload
 ```
 
+## Docker
+
+The MVP Docker setup runs only the API. Neon remains the database, so no local
+Postgres container is required. Redis will be added when background jobs are
+implemented.
+
+Make sure `.env` contains the Neon development database and auth settings,
+then start the API with:
+
+```bash
+docker compose up --build
+```
+
+Apply database migrations through the same container:
+
+```bash
+docker compose run --rm api alembic upgrade head
+```
+
+The API is available at `http://127.0.0.1:8000`.
+
 Run tests:
 
 ```bash
 pytest
+```
+
+When Anaconda or another global Python is active, prefer the virtual environment explicitly:
+
+```bash
+.venv/bin/python scripts/check_neon_connection.py
+.venv/bin/pytest
 ```
 
 Check the database connection:

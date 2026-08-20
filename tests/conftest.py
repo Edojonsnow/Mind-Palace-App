@@ -13,7 +13,6 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
 
-TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
 OTHER_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
 
 
@@ -40,7 +39,6 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 
     async def override_get_current_user() -> AuthenticatedUser:
         return AuthenticatedUser(
-            id=str(TEST_USER_ID),
             auth_user_id="test-auth-user",
             email="alex@example.com",
         )
@@ -52,4 +50,3 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
         yield test_client
 
     app.dependency_overrides.clear()
-
