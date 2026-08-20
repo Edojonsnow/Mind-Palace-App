@@ -3,6 +3,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, TypeDecorator, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,11 +17,10 @@ class EmbeddingVector(TypeDecorator[Any]):
 
     impl = JSON
     cache_ok = True
+    comparator_factory = Vector.Comparator
 
     def load_dialect_impl(self, dialect):  # type: ignore[no-untyped-def]
         if dialect.name == "postgresql":
-            from pgvector.sqlalchemy import Vector
-
             return dialect.type_descriptor(Vector(EMBEDDING_DIMENSIONS))
         return dialect.type_descriptor(JSON())
 

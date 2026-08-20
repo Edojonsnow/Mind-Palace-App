@@ -147,3 +147,15 @@ mark the job and thought as failed without undoing the saved thought.
 The current implementation uses `text-embedding-3-small` with 1536 dimensions
 and a configurable metadata model. The embedding dimension is part of the
 database schema; changing it requires a migration.
+
+## Ask My Mind
+
+The retrieval MVP is available at `POST /ask`. It embeds the question, searches
+the authenticated user's ready thought chunks with pgvector, asks OpenAI for a
+structured answer grounded in those sources, and returns citation data for the
+client source panel. Chat history is stored by default and can be disabled with
+the `store_chat_history` user setting.
+
+The current endpoint answers from saved thoughts only. Web search, streaming,
+and mobile offline chat are separate follow-up implementations. See
+`docs/ASK_MY_MIND.md` for the request flow and technical design.

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health, thoughts
+from app.api.routes import ask, health, thoughts
 from app.api.routes import settings as settings_routes
 from app.core.config import settings
 
@@ -19,6 +19,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(health.router)
+    app.include_router(ask.router)
     app.include_router(settings_routes.router)
     app.include_router(thoughts.router)
     return app

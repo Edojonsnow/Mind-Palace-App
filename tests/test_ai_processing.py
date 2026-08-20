@@ -15,7 +15,11 @@ from app.models import (
     ThoughtMetadata,
 )
 from app.services.ai_processing import process_ai_job
-from app.services.openai_ai import ExtractedThoughtMetadata, OpenAIProvider
+from app.services.openai_ai import (
+    ExtractedThoughtMetadata,
+    GeneratedAskAnswer,
+    OpenAIProvider,
+)
 
 
 class FakeAIProvider:
@@ -67,6 +71,39 @@ def test_openai_provider_adapts_embeddings_and_structured_metadata() -> None:
 
     assert provider.embed(["first", "second"]) == [[1.0], [2.0]]
     assert provider.extract_metadata("A thought").summary == "Structured result"
+
+
+def test_openai_provider_adapts_structured_ask_answer() -> None:
+    class FakeCompletions:
+        def parse(self, **kwargs: object) -> SimpleNamespace:
+            assert kwargs["model"] == "gpt-4.1-mini"
+            assert kwargs["response_format"] is GeneratedAskAnswer
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            parsed=GeneratedAskAnswer(
+                                answer="A grounded answer [S1]",
+                                citation_ids=["S1"],
+                            )
+                        )
+                    )
+                ]
+            )
+
+    fake_client = SimpleNamespace(
+        chat=SimpleNamespace(completions=FakeCompletions()),
+    )
+    provider = OpenAIProvider(Settings(openai_api_key="test"), client=fake_client)
+
+    answer = provider.answer_question(
+        "What matters?",
+        "[S1] Protect focused work.",
+        [],
+    )
+
+    assert answer.answer == "A grounded answer [S1]"
+    assert answer.citation_ids == ["S1"]
 
 
 def test_ai_disabled_thought_does_not_enqueue_or_create_job(
