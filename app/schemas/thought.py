@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
-from app.models.thought import SourceType, StorageScope, ThoughtType
+from app.models.thought import AIProcessingStatus, SourceType, StorageScope, ThoughtType
 
 
 class ThoughtCreate(BaseModel):
@@ -55,10 +55,10 @@ class ThoughtRead(BaseModel):
     manual_tags: list[str]
     storage_scope: StorageScope
     use_with_ask_my_mind: bool
+    ai_processing_status: AIProcessingStatus
     is_archived: bool
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
-

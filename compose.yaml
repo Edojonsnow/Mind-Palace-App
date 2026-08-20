@@ -1,8 +1,27 @@
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
   api:
     build: .
     env_file:
       - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
     ports:
       - "8000:8000"
     restart: unless-stopped
+    depends_on:
+      - redis
+
+  worker:
+    build: .
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    command: ["python", "-m", "app.workers.run"]
+    restart: unless-stopped
+    depends_on:
+      - redis

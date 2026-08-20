@@ -9,7 +9,7 @@ Backend/API service for Mind Palace.
 - SQLAlchemy
 - Alembic
 - Neon Postgres
-- RQ/Redis later for background jobs
+- RQ/Redis for background jobs
 
 ## Local Setup
 
@@ -70,9 +70,9 @@ uvicorn app.main:app --reload
 
 ## Docker
 
-The MVP Docker setup runs only the API. Neon remains the database, so no local
-Postgres container is required. Redis will be added when background jobs are
-implemented.
+The Docker setup runs the API, an RQ worker, and Redis. Neon remains the
+database, so no local Postgres container is required. The worker processes only
+thoughts whose `use_with_ask_my_mind` value is `true`.
 
 Make sure `.env` contains the Neon development database and auth settings,
 then start the API with:
@@ -80,6 +80,10 @@ then start the API with:
 ```bash
 docker compose up --build
 ```
+
+The API and worker use `redis://redis:6379/0` inside Compose. When running the
+API directly on the host, use the local default `redis://localhost:6379/0` and
+start Redis separately.
 
 Apply database migrations through the same container:
 
@@ -120,3 +124,26 @@ curl http://127.0.0.1:8000/health/db
 - Thought bodies are server-readable in the MVP.
 - Raw thought bodies, chat messages, prompts, and AI responses must not be logged.
 - Local-only thought storage is deferred until the mobile app phase.
+
+## AI Processing
+
+AI participation is opt-in per thought. Saving a thought with AI disabled only
+writes the original thought and deterministic fields. It does not enqueue a
+job, call OpenAI, create chunks, or create embeddings.
+
+When AI is enabled, the API saves the thought first and creates a pending
+`background_jobs` row. RQ sends the job to the worker, which:
+
+1. splits the thought into overlapping text chunks;
+2. creates an embedding for each chunk with OpenAI's embedding endpoint;
+3. extracts structured metadata with an OpenAI model; and
+4. stores the derived artifacts and marks the thought ready for retrieval.
+
+The original thought remains the source record. Chunks, embeddings, and AI
+metadata are derived artifacts that can be rebuilt or purged. Turning AI off
+deletes those artifacts and cancels pending or running jobs. OpenAI failures
+mark the job and thought as failed without undoing the saved thought.
+
+The current implementation uses `text-embedding-3-small` with 1536 dimensions
+and a configurable metadata model. The embedding dimension is part of the
+database schema; changing it requires a migration.

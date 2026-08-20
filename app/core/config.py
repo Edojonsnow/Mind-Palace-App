@@ -18,7 +18,14 @@ class Settings(BaseSettings):
     neon_auth_audience: str | None = None
     backend_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     openai_api_key: str | None = None
+    openai_embedding_model: str = "text-embedding-3-small"
+    openai_embedding_dimensions: int = 1536
+    openai_metadata_model: str = "gpt-4.1-mini"
+    openai_timeout_seconds: float = 30.0
     redis_url: str = "redis://localhost:6379/0"
+    ai_queue_name: str = "mind-palace-ai"
+    ai_chunk_size_chars: int = 1600
+    ai_chunk_overlap_chars: int = 200
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

@@ -30,6 +30,14 @@ class StorageScope(StrEnum):
     LOCAL_DEVICE = "local_device"
 
 
+class AIProcessingStatus(StrEnum):
+    NOT_REQUESTED = "not_requested"
+    PENDING = "pending"
+    PROCESSING = "processing"
+    READY = "ready"
+    FAILED = "failed"
+
+
 class Thought(Base):
     __tablename__ = "thoughts"
 
@@ -48,6 +56,10 @@ class Thought(Base):
     manual_tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     storage_scope: Mapped[str] = mapped_column(String(32), default=StorageScope.CLOUD.value)
     use_with_ask_my_mind: Mapped[bool] = mapped_column(Boolean, default=False)
+    ai_processing_status: Mapped[str] = mapped_column(
+        String(32),
+        default=AIProcessingStatus.NOT_REQUESTED.value,
+    )
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -61,4 +73,10 @@ class Thought(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user = relationship("User", back_populates="thoughts")
-
+    chunks = relationship("ThoughtChunk", back_populates="thought", cascade="all, delete-orphan")
+    metadata_record = relationship(
+        "ThoughtMetadata",
+        back_populates="thought",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )

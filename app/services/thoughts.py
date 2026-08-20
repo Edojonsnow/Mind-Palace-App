@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models import StorageScope, Thought, User, UserSettings
 from app.schemas import ThoughtCreate, ThoughtUpdate, UserSettingsUpdate
+from app.services.ai_processing import purge_ai_artifacts, schedule_ai_processing
 
 
 def create_thought(db: Session, user: User, payload: ThoughtCreate) -> Thought:
@@ -42,6 +43,9 @@ def create_thought(db: Session, user: User, payload: ThoughtCreate) -> Thought:
     db.add(thought)
     db.commit()
     db.refresh(thought)
+    if thought.use_with_ask_my_mind:
+        schedule_ai_processing(db, thought)
+        db.refresh(thought)
     return thought
 
 
@@ -70,6 +74,7 @@ def get_thought(db: Session, user: User, thought_id: UUID) -> Thought:
 
 def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUpdate) -> Thought:
     thought = get_thought(db, user, thought_id)
+    was_ai_enabled = thought.use_with_ask_my_mind
     values = payload.model_dump(exclude_unset=True)
     for key, value in values.items():
         if key in {"thought_type", "source_type"} and value is not None:
@@ -80,6 +85,14 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
 
     db.commit()
     db.refresh(thought)
+
+    if not thought.use_with_ask_my_mind and was_ai_enabled:
+        purge_ai_artifacts(db, thought)
+    elif thought.use_with_ask_my_mind and (
+        not was_ai_enabled or "body" in values or thought.ai_processing_status == "failed"
+    ):
+        schedule_ai_processing(db, thought)
+        db.refresh(thought)
     return thought
 
 
@@ -113,4 +126,3 @@ def update_user_settings(
     db.commit()
     db.refresh(settings)
     return settings
-
