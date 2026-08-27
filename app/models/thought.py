@@ -71,6 +71,7 @@ class Thought(Base):
         onupdate=func.now(),
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    purge_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     user = relationship("User", back_populates="thoughts")
     chunks = relationship("ThoughtChunk", back_populates="thought", cascade="all, delete-orphan")

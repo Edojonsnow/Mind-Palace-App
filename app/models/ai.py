@@ -30,6 +30,8 @@ class BackgroundJobType(StrEnum):
     EMBED_THOUGHT = "embed_thought"
     EXTRACT_METADATA = "extract_metadata"
     PURGE_AI_ARTIFACTS = "purge_ai_artifacts"
+    PURGE_DELETED_THOUGHT = "purge_deleted_thought"
+    GENERATE_EXPORT = "generate_export"
 
 
 class BackgroundJobStatus(StrEnum):

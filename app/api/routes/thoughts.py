@@ -10,6 +10,7 @@ from app.core.auth import AuthenticatedUser, get_current_user
 from app.db.session import get_db
 from app.models import SourceType, ThoughtType
 from app.schemas import ThoughtCreate, ThoughtRead, ThoughtUpdate
+from app.services.data_lifecycle import list_deleted_thoughts, restore_thought
 from app.services.thoughts import (
     create_thought,
     get_thought,
@@ -91,6 +92,15 @@ def list_thoughts_route(
     return result.items
 
 
+@router.get("/deleted", response_model=list[ThoughtRead])
+def list_deleted_thoughts_route(
+    db: Annotated[Session, Depends(get_db)],
+    authenticated_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+):
+    user = get_or_create_user(db, authenticated_user)
+    return list_deleted_thoughts(db, user)
+
+
 @router.get("/{thought_id}", response_model=ThoughtRead)
 def get_thought_route(
     thought_id: UUID,
@@ -121,3 +131,13 @@ def delete_thought_route(
     user = get_or_create_user(db, authenticated_user)
     soft_delete_thought(db, user, thought_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{thought_id}/restore", response_model=ThoughtRead)
+def restore_thought_route(
+    thought_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    authenticated_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+):
+    user = get_or_create_user(db, authenticated_user)
+    return restore_thought(db, user, thought_id)

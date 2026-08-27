@@ -8,6 +8,12 @@ from app.models.ai import (
     ThoughtMetadata,
 )
 from app.models.chat import ChatConversation, ChatMessage, ChatMessageRole
+from app.models.lifecycle import (
+    AccountDeletionRequest,
+    AccountDeletionStatus,
+    ExportRequest,
+    ExportRequestStatus,
+)
 from app.models.thought import AIProcessingStatus, SourceType, StorageScope, Thought, ThoughtType
 from app.models.user import User
 from app.models.user_settings import UserSettings
@@ -19,6 +25,8 @@ __all__ = [
     "ChatConversation",
     "ChatMessage",
     "ChatMessageRole",
+    "AccountDeletionRequest",
+    "AccountDeletionStatus",
     "BackgroundJob",
     "BackgroundJobStatus",
     "BackgroundJobType",
@@ -26,6 +34,8 @@ __all__ = [
     "ThoughtChunk",
     "ThoughtMetadata",
     "ThoughtType",
+    "ExportRequest",
+    "ExportRequestStatus",
     "User",
     "UserSettings",
 ]

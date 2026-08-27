@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     ask_top_k: int = 5
     ask_history_messages: int = 10
     ask_max_context_chars: int = 12000
+    recovery_window_days: int = 30
+    export_retention_hours: int = 24
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

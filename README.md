@@ -183,3 +183,6 @@ the `store_chat_history` user setting.
 The current endpoint answers from saved thoughts only. Web search, streaming,
 and mobile offline chat are separate follow-up implementations. See
 `docs/ASK_MY_MIND.md` for the request flow and technical design.
+
+See [Data Lifecycle](docs/DATA_LIFECYCLE.md) for recovery, export, and account
+deletion behavior.

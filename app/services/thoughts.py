@@ -1,14 +1,16 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import Text, cast, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models import SourceType, StorageScope, Thought, ThoughtType, User, UserSettings
 from app.schemas import ThoughtCreate, ThoughtUpdate, UserSettingsUpdate
 from app.services.ai_processing import purge_ai_artifacts, schedule_ai_processing
+from app.services.data_lifecycle import schedule_thought_purge
 
 
 def create_thought(db: Session, user: User, payload: ThoughtCreate) -> Thought:
@@ -202,8 +204,12 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
 
 def soft_delete_thought(db: Session, user: User, thought_id: UUID) -> None:
     thought = get_thought(db, user, thought_id)
-    thought.deleted_at = datetime.now(UTC)
+    deleted_at = datetime.now(UTC)
+    thought.deleted_at = deleted_at
+    thought.purge_at = deleted_at + timedelta(days=settings.recovery_window_days)
     db.commit()
+    db.refresh(thought)
+    schedule_thought_purge(db, thought)
 
 
 def get_user_settings(db: Session, user: User) -> UserSettings:
