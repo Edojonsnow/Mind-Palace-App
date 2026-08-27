@@ -64,3 +64,9 @@ Keep user-owned reads and writes scoped by the authenticated user.
 - Add an Alembic migration for database model changes.
 - Keep changes narrow and aligned with the existing route/schema/service/model split.
 - Do not add frontend, mobile, AI, queue, or storage-object behavior before the implementation plan reaches that phase.
+
+## Commit Messages
+
+- Use an imperative subject that clearly names the change.
+- Include a short body explaining the main implementation details, user-facing impact, and verification when relevant.
+- Avoid one-line-only commit messages for implementation work.

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
@@ -19,6 +20,7 @@ from app.services.thoughts import (
 from app.services.users import get_or_create_user
 
 router = APIRouter(prefix="/thoughts", tags=["thoughts"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=ThoughtRead, status_code=status.HTTP_201_CREATED)
@@ -47,6 +49,19 @@ def list_thoughts_route(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ):
+    logger.info(
+        "Recall request received: has_query=%s query_length=%d has_tag=%s has_book=%s "
+        "thought_type=%s source_type=%s is_archived=%s page=%d page_size=%d",
+        bool(q and q.strip()),
+        len(q.strip()) if q else 0,
+        bool(tag and tag.strip()),
+        bool(book and book.strip()),
+        thought_type.value if thought_type else None,
+        source_type.value if source_type else None,
+        is_archived,
+        page,
+        page_size,
+    )
     user = get_or_create_user(db, authenticated_user)
     result = list_thoughts(
         db,
@@ -66,6 +81,13 @@ def list_thoughts_route(
     response.headers["X-Page"] = str(page)
     response.headers["X-Page-Size"] = str(page_size)
     response.headers["X-Total-Pages"] = str((result.total + page_size - 1) // page_size)
+    logger.info(
+        "Recall response returned: total_matches=%d returned_count=%d page=%d page_size=%d",
+        result.total,
+        len(result.items),
+        page,
+        page_size,
+    )
     return result.items
 
 
