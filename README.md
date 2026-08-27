@@ -148,6 +148,30 @@ The current implementation uses `text-embedding-3-small` with 1536 dimensions
 and a configurable metadata model. The embedding dimension is part of the
 database schema; changing it requires a migration.
 
+## Recall
+
+`GET /thoughts` is the Recall endpoint. It returns the authenticated user's
+non-deleted thoughts as a list, preserving the response shape used by the web
+client. Results can be narrowed with these query parameters:
+
+- `q`: case-insensitive keyword search across title, body, source, and book fields;
+- `thought_type`: `thought`, `journal`, `quote`, or `book_excerpt`;
+- `source_type`: `manual`, `book`, `article`, `website`, `audio`, `import`, or `unknown`;
+- `tag`: an exact manual tag;
+- `book`: case-insensitive search across book title and author;
+- `is_archived`: explicitly include only archived or non-archived thoughts;
+- `created_from` and `created_to`: inclusive ISO 8601 timestamp bounds;
+- `page`: one-based page number, defaulting to `1`; and
+- `page_size`: result count per page from `1` to `100`, defaulting to `20`.
+
+Pagination metadata is returned in `X-Total-Count`, `X-Page`, `X-Page-Size`,
+and `X-Total-Pages` response headers. Without filters, the endpoint keeps the
+previous behavior and returns all visible thoughts ordered newest first.
+
+The MVP uses database-backed case-insensitive substring matching. PostgreSQL
+full-text search or a dedicated search index can be added later if Recall
+volume makes substring search too slow.
+
 ## Ask My Mind
 
 The retrieval MVP is available at `POST /ask`. It embeds the question, searches

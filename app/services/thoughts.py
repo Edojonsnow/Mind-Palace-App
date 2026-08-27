@@ -1,11 +1,12 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import Text, cast, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import StorageScope, Thought, User, UserSettings
+from app.models import SourceType, StorageScope, Thought, ThoughtType, User, UserSettings
 from app.schemas import ThoughtCreate, ThoughtUpdate, UserSettingsUpdate
 from app.services.ai_processing import purge_ai_artifacts, schedule_ai_processing
 
@@ -49,14 +50,117 @@ def create_thought(db: Session, user: User, payload: ThoughtCreate) -> Thought:
     return thought
 
 
-def list_thoughts(db: Session, user: User) -> list[Thought]:
-    return list(
+@dataclass(frozen=True)
+class ThoughtListResult:
+    items: list[Thought]
+    total: int
+
+
+def _like_pattern(value: str) -> str:
+    escaped = value.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _thought_filters(
+    user: User,
+    *,
+    query: str | None = None,
+    thought_type: ThoughtType | None = None,
+    source_type: SourceType | None = None,
+    tag: str | None = None,
+    book: str | None = None,
+    is_archived: bool | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
+):
+    filters = [Thought.user_id == user.id, Thought.deleted_at.is_(None)]
+
+    if query and query.strip():
+        pattern = _like_pattern(query)
+        filters.append(
+            or_(
+                Thought.title.ilike(pattern, escape="\\"),
+                Thought.body.ilike(pattern, escape="\\"),
+                Thought.source_title.ilike(pattern, escape="\\"),
+                Thought.source_author.ilike(pattern, escape="\\"),
+                Thought.book_title.ilike(pattern, escape="\\"),
+                Thought.book_author.ilike(pattern, escape="\\"),
+            )
+        )
+
+    if thought_type is not None:
+        filters.append(Thought.thought_type == thought_type.value)
+    if source_type is not None:
+        filters.append(Thought.source_type == source_type.value)
+    if tag and tag.strip():
+        tag_json_value = tag.strip().replace("\\", "\\\\").replace('"', '\\"')
+        filters.append(
+            cast(Thought.manual_tags, Text).ilike(
+                _like_pattern(f'"{tag_json_value}"'),
+                escape="\\",
+            )
+        )
+    if book and book.strip():
+        pattern = _like_pattern(book)
+        filters.append(
+            or_(
+                Thought.book_title.ilike(pattern, escape="\\"),
+                Thought.book_author.ilike(pattern, escape="\\"),
+            )
+        )
+    if is_archived is not None:
+        filters.append(Thought.is_archived.is_(is_archived))
+    if created_from is not None:
+        filters.append(Thought.created_at >= created_from)
+    if created_to is not None:
+        filters.append(Thought.created_at <= created_to)
+
+    return filters
+
+
+def list_thoughts(
+    db: Session,
+    user: User,
+    *,
+    query: str | None = None,
+    thought_type: ThoughtType | None = None,
+    source_type: SourceType | None = None,
+    tag: str | None = None,
+    book: str | None = None,
+    is_archived: bool | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> ThoughtListResult:
+    if created_from is not None and created_to is not None and created_from > created_to:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="created_from must be before or equal to created_to",
+        )
+
+    filters = _thought_filters(
+        user,
+        query=query,
+        thought_type=thought_type,
+        source_type=source_type,
+        tag=tag,
+        book=book,
+        is_archived=is_archived,
+        created_from=created_from,
+        created_to=created_to,
+    )
+    total = db.scalar(select(func.count(Thought.id)).where(*filters)) or 0
+    items = list(
         db.scalars(
             select(Thought)
-            .where(Thought.user_id == user.id, Thought.deleted_at.is_(None))
-            .order_by(Thought.created_at.desc())
+            .where(*filters)
+            .order_by(Thought.created_at.desc(), Thought.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
         )
     )
+    return ThoughtListResult(items=items, total=total)
 
 
 def get_thought(db: Session, user: User, thought_id: UUID) -> Thought:

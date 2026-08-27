@@ -1,0 +1,105 @@
+from fastapi.testclient import TestClient
+
+
+def create_thought(client: TestClient, **overrides: object) -> dict:
+    payload = {"body": "A useful thought for recall."}
+    payload.update(overrides)
+    response = client.post("/thoughts", json=payload)
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_recall_searches_text_and_returns_pagination_headers(client: TestClient) -> None:
+    create_thought(
+        client,
+        title="Deep work",
+        body="Protect focused work each morning.",
+        manual_tags=["focus"],
+    )
+    create_thought(client, title="Reading list", body="Book notes for later.")
+
+    response = client.get(
+        "/thoughts",
+        params={"q": "FOCUSED", "page_size": 10},
+        headers={"Origin": "http://localhost:3000"},
+    )
+
+    assert response.status_code == 200
+    assert [thought["title"] for thought in response.json()] == ["Deep work"]
+    assert response.headers["X-Total-Count"] == "1"
+    assert response.headers["X-Page"] == "1"
+    assert response.headers["X-Page-Size"] == "10"
+    assert response.headers["X-Total-Pages"] == "1"
+    assert "X-Total-Count" in response.headers["Access-Control-Expose-Headers"]
+
+
+def test_recall_composes_metadata_filters(client: TestClient) -> None:
+    create_thought(
+        client,
+        title="Atomic Habits quote",
+        body="Small actions compound over time.",
+        thought_type="quote",
+        source_type="book",
+        book_title="Atomic Habits",
+        book_author="James Clear",
+        manual_tags=["reading", "habits"],
+        is_archived=True,
+    )
+    create_thought(
+        client,
+        title="Habit reflection",
+        body="Make the next action smaller.",
+        thought_type="journal",
+        source_type="manual",
+        manual_tags=["habits"],
+    )
+
+    response = client.get(
+        "/thoughts",
+        params={
+            "thought_type": "quote",
+            "source_type": "book",
+            "tag": "reading",
+            "book": "atomic",
+            "is_archived": "true",
+        },
+    )
+
+    assert response.status_code == 200
+    thoughts = response.json()
+    assert len(thoughts) == 1
+    assert thoughts[0]["title"] == "Atomic Habits quote"
+
+
+def test_recall_paginates_deterministically(client: TestClient) -> None:
+    created = [create_thought(client, title=f"Thought {index}") for index in range(3)]
+
+    first_page = client.get("/thoughts", params={"page": 1, "page_size": 2})
+    repeated_first_page = client.get("/thoughts", params={"page": 1, "page_size": 2})
+    second_page = client.get("/thoughts", params={"page": 2, "page_size": 2})
+
+    assert first_page.status_code == 200
+    assert repeated_first_page.status_code == 200
+    assert second_page.status_code == 200
+    first_page_ids = [thought["id"] for thought in first_page.json()]
+    repeated_first_page_ids = [thought["id"] for thought in repeated_first_page.json()]
+    second_page_ids = [thought["id"] for thought in second_page.json()]
+    assert first_page_ids == repeated_first_page_ids
+    assert len(first_page_ids) == 2
+    assert len(second_page_ids) == 1
+    assert set(first_page_ids + second_page_ids) == {thought["id"] for thought in created}
+    assert second_page.headers["X-Total-Count"] == "3"
+    assert second_page.headers["X-Total-Pages"] == "2"
+
+
+def test_recall_rejects_an_invalid_date_range(client: TestClient) -> None:
+    response = client.get(
+        "/thoughts",
+        params={
+            "created_from": "2026-08-21T00:00:00Z",
+            "created_to": "2026-08-20T00:00:00Z",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "created_from must be before or equal to created_to"
