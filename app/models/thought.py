@@ -81,3 +81,7 @@ class Thought(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+
+    @property
+    def ai_metadata(self):
+        return self.metadata_record

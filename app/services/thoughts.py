@@ -3,11 +3,19 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import Text, cast, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import Text, and_, cast, func, or_, select
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
-from app.models import SourceType, StorageScope, Thought, ThoughtType, User, UserSettings
+from app.models import (
+    SourceType,
+    StorageScope,
+    Thought,
+    ThoughtMetadata,
+    ThoughtType,
+    User,
+    UserSettings,
+)
 from app.schemas import ThoughtCreate, ThoughtUpdate, UserSettingsUpdate
 from app.services.ai_processing import purge_ai_artifacts, schedule_ai_processing
 from app.services.data_lifecycle import schedule_thought_purge
@@ -63,6 +71,10 @@ def _like_pattern(value: str) -> str:
     return f"%{escaped}%"
 
 
+def _metadata_contains(column, value: str):
+    return cast(column, Text).ilike(_like_pattern(f'"{value.strip()}"'), escape="\\")
+
+
 def _thought_filters(
     user: User,
     *,
@@ -71,6 +83,10 @@ def _thought_filters(
     source_type: SourceType | None = None,
     tag: str | None = None,
     book: str | None = None,
+    theme: str | None = None,
+    emotion: str | None = None,
+    person: str | None = None,
+    place: str | None = None,
     is_archived: bool | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
@@ -110,6 +126,15 @@ def _thought_filters(
                 Thought.book_author.ilike(pattern, escape="\\"),
             )
         )
+
+    if theme and theme.strip():
+        filters.append(_metadata_contains(ThoughtMetadata.themes, theme))
+    if emotion and emotion.strip():
+        filters.append(_metadata_contains(ThoughtMetadata.emotions, emotion))
+    if person and person.strip():
+        filters.append(_metadata_contains(ThoughtMetadata.people, person))
+    if place and place.strip():
+        filters.append(_metadata_contains(ThoughtMetadata.places, place))
     if is_archived is not None:
         filters.append(Thought.is_archived.is_(is_archived))
     if created_from is not None:
@@ -129,6 +154,10 @@ def list_thoughts(
     source_type: SourceType | None = None,
     tag: str | None = None,
     book: str | None = None,
+    theme: str | None = None,
+    emotion: str | None = None,
+    person: str | None = None,
+    place: str | None = None,
     is_archived: bool | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
@@ -148,14 +177,32 @@ def list_thoughts(
         source_type=source_type,
         tag=tag,
         book=book,
+        theme=theme,
+        emotion=emotion,
+        person=person,
+        place=place,
         is_archived=is_archived,
         created_from=created_from,
         created_to=created_to,
     )
-    total = db.scalar(select(func.count(Thought.id)).where(*filters)) or 0
+    metadata_join = and_(
+        ThoughtMetadata.thought_id == Thought.id,
+        ThoughtMetadata.user_id == user.id,
+    )
+    total = (
+        db.scalar(
+            select(func.count(func.distinct(Thought.id)))
+            .select_from(Thought)
+            .outerjoin(ThoughtMetadata, metadata_join)
+            .where(*filters)
+        )
+        or 0
+    )
     items = list(
         db.scalars(
             select(Thought)
+            .options(selectinload(Thought.metadata_record))
+            .outerjoin(ThoughtMetadata, metadata_join)
             .where(*filters)
             .order_by(Thought.created_at.desc(), Thought.id.desc())
             .offset((page - 1) * page_size)
@@ -167,7 +214,9 @@ def list_thoughts(
 
 def get_thought(db: Session, user: User, thought_id: UUID) -> Thought:
     thought = db.scalar(
-        select(Thought).where(
+        select(Thought)
+        .options(selectinload(Thought.metadata_record))
+        .where(
             Thought.id == thought_id,
             Thought.user_id == user.id,
             Thought.deleted_at.is_(None),
@@ -199,6 +248,20 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
     ):
         schedule_ai_processing(db, thought)
         db.refresh(thought)
+    return thought
+
+
+def retry_ai_processing(db: Session, user: User, thought_id: UUID) -> Thought:
+    thought = get_thought(db, user, thought_id)
+    if not thought.use_with_ask_my_mind:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Enable Use with Ask My Mind before retrying organization",
+        )
+
+    purge_ai_artifacts(db, thought)
+    schedule_ai_processing(db, thought)
+    db.refresh(thought)
     return thought
 
 

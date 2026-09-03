@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
@@ -39,6 +40,22 @@ class ThoughtUpdate(BaseModel):
     is_archived: bool | None = None
 
 
+class ThoughtMetadataRead(BaseModel):
+    summary: str | None
+    themes: list[str]
+    emotions: list[str]
+    people: list[str]
+    places: list[str]
+    books: list[str]
+    key_questions: list[str]
+    action_items: list[str]
+    deterministic_metadata: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ThoughtRead(BaseModel):
     id: UUID
     user_id: UUID
@@ -61,5 +78,6 @@ class ThoughtRead(BaseModel):
     updated_at: datetime
     deleted_at: datetime | None
     purge_at: datetime | None
+    ai_metadata: ThoughtMetadataRead | None = None
 
     model_config = ConfigDict(from_attributes=True)

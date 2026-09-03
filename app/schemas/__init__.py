@@ -9,7 +9,7 @@ from app.schemas.ask import (
 )
 from app.schemas.lifecycle import AccountDeletionRequestRead, ExportRequestRead
 from app.schemas.settings import UserSettingsRead, UserSettingsUpdate
-from app.schemas.thought import ThoughtCreate, ThoughtRead, ThoughtUpdate
+from app.schemas.thought import ThoughtCreate, ThoughtMetadataRead, ThoughtRead, ThoughtUpdate
 
 __all__ = [
     "AskRequest",
@@ -20,6 +20,7 @@ __all__ = [
     "ChatMessageRead",
     "ExportRequestRead",
     "ThoughtCreate",
+    "ThoughtMetadataRead",
     "ThoughtRead",
     "ThoughtUpdate",
     "UserSettingsRead",

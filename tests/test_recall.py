@@ -1,4 +1,9 @@
+from uuid import UUID
+
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.models import ThoughtMetadata
 
 
 def create_thought(client: TestClient, **overrides: object) -> dict:
@@ -69,6 +74,66 @@ def test_recall_composes_metadata_filters(client: TestClient) -> None:
     thoughts = response.json()
     assert len(thoughts) == 1
     assert thoughts[0]["title"] == "Atomic Habits quote"
+
+
+def test_recall_filters_by_generated_theme_and_emotion(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    first = create_thought(
+        client,
+        title="Focus reflection",
+        body="A reflection.",
+        use_with_ask_my_mind=False,
+    )
+    second = create_thought(
+        client,
+        title="Rest reflection",
+        body="Another reflection.",
+        use_with_ask_my_mind=False,
+    )
+    db_session.add_all(
+        [
+            ThoughtMetadata(
+                user_id=UUID(first["user_id"]),
+                thought_id=UUID(first["id"]),
+                summary=None,
+                themes=["Focus"],
+                emotions=["Calm"],
+                people=[],
+                places=[],
+                books=[],
+                key_questions=[],
+                action_items=[],
+                deterministic_metadata={},
+            ),
+            ThoughtMetadata(
+                user_id=UUID(second["user_id"]),
+                thought_id=UUID(second["id"]),
+                summary=None,
+                themes=["Rest"],
+                emotions=["Hope"],
+                people=[],
+                places=[],
+                books=[],
+                key_questions=[],
+                action_items=[],
+                deterministic_metadata={},
+            ),
+        ]
+    )
+    db_session.commit()
+
+    theme_response = client.get("/thoughts", params={"theme": "focus"})
+    emotion_response = client.get("/thoughts", params={"emotion": "hope"})
+    combined_response = client.get(
+        "/thoughts",
+        params={"theme": "focus", "emotion": "calm"},
+    )
+
+    assert [thought["title"] for thought in theme_response.json()] == ["Focus reflection"]
+    assert [thought["title"] for thought in emotion_response.json()] == ["Rest reflection"]
+    assert [thought["title"] for thought in combined_response.json()] == ["Focus reflection"]
 
 
 def test_recall_paginates_deterministically(client: TestClient) -> None:

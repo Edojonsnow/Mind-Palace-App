@@ -15,6 +15,7 @@ from app.services.thoughts import (
     create_thought,
     get_thought,
     list_thoughts,
+    retry_ai_processing,
     soft_delete_thought,
     update_thought,
 )
@@ -44,6 +45,10 @@ def list_thoughts_route(
     source_type: SourceType | None = None,
     tag: Annotated[str | None, Query(max_length=100)] = None,
     book: Annotated[str | None, Query(max_length=255)] = None,
+    theme: Annotated[str | None, Query(max_length=100)] = None,
+    emotion: Annotated[str | None, Query(max_length=100)] = None,
+    person: Annotated[str | None, Query(max_length=255)] = None,
+    place: Annotated[str | None, Query(max_length=255)] = None,
     is_archived: bool | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
@@ -52,11 +57,16 @@ def list_thoughts_route(
 ):
     logger.info(
         "Recall request received: has_query=%s query_length=%d has_tag=%s has_book=%s "
-        "thought_type=%s source_type=%s is_archived=%s page=%d page_size=%d",
+        "has_theme=%s has_emotion=%s has_person=%s has_place=%s thought_type=%s "
+        "source_type=%s is_archived=%s page=%d page_size=%d",
         bool(q and q.strip()),
         len(q.strip()) if q else 0,
         bool(tag and tag.strip()),
         bool(book and book.strip()),
+        bool(theme and theme.strip()),
+        bool(emotion and emotion.strip()),
+        bool(person and person.strip()),
+        bool(place and place.strip()),
         thought_type.value if thought_type else None,
         source_type.value if source_type else None,
         is_archived,
@@ -72,6 +82,10 @@ def list_thoughts_route(
         source_type=source_type,
         tag=tag,
         book=book,
+        theme=theme,
+        emotion=emotion,
+        person=person,
+        place=place,
         is_archived=is_archived,
         created_from=created_from,
         created_to=created_to,
@@ -131,6 +145,16 @@ def delete_thought_route(
     user = get_or_create_user(db, authenticated_user)
     soft_delete_thought(db, user, thought_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{thought_id}/organize", response_model=ThoughtRead)
+def retry_ai_processing_route(
+    thought_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    authenticated_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+):
+    user = get_or_create_user(db, authenticated_user)
+    return retry_ai_processing(db, user, thought_id)
 
 
 @router.post("/{thought_id}/restore", response_model=ThoughtRead)
