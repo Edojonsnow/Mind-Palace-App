@@ -30,6 +30,18 @@ def test_create_thought_defaults_ai_participation_off(client: TestClient) -> Non
     assert body["ai_metadata"] is None
 
 
+def test_manual_tags_are_trimmed_and_deduplicated_without_a_count_limit(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/thoughts",
+        json={"body": "A thought with manual labels.", "manual_tags": [" work ", "Work", "ideas"]},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["manual_tags"] == ["work", "ideas"]
+
+
 def test_thought_response_includes_generated_metadata(
     client: TestClient,
     db_session: Session,

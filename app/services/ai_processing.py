@@ -17,9 +17,88 @@ from app.models import (
     ThoughtChunk,
     ThoughtMetadata,
 )
-from app.services.openai_ai import ExtractedThoughtMetadata, OpenAIProvider
+from app.services.openai_ai import (
+    TENTATIVE_EMOTIONS,
+    TENTATIVE_THEMES,
+    ExtractedThoughtMetadata,
+    OpenAIProvider,
+)
 
 logger = logging.getLogger(__name__)
+
+
+THEME_ALIASES = {
+    "career": "Work",
+    "career development": "Work",
+    "professional growth": "Work",
+    "self improvement": "Personal growth",
+    "self-improvement": "Personal growth",
+}
+
+EMOTION_ALIASES = {
+    "happy": "Joy",
+    "happiness": "Joy",
+    "excited": "Excitement",
+    "grateful": "Gratitude",
+    "thankful": "Gratitude",
+    "worried": "Anxiety",
+    "anxious": "Anxiety",
+    "frustrated": "Frustration",
+    "overwhelmed": "Overwhelm",
+}
+
+
+def _normalize_values(
+    values: list[str],
+    *,
+    aliases: dict[str, str] | None = None,
+    vocabulary: tuple[str, ...] = (),
+    limit: int | None = None,
+) -> list[str]:
+    canonical_vocabulary = {value.casefold(): value for value in vocabulary}
+    normalized: list[str] = []
+    seen: set[str] = set()
+
+    for value in values:
+        cleaned = " ".join(value.split()).strip()
+        if not cleaned:
+            continue
+        key = cleaned.casefold()
+        canonical = (aliases or {}).get(key) or canonical_vocabulary.get(key) or cleaned
+        canonical_key = canonical.casefold()
+        if canonical_key in seen:
+            continue
+        normalized.append(canonical)
+        seen.add(canonical_key)
+        if limit is not None and len(normalized) >= limit:
+            break
+
+    return normalized
+
+
+def normalize_extracted_metadata(metadata: ExtractedThoughtMetadata) -> ExtractedThoughtMetadata:
+    """Keep AI metadata compact and stable before persisting it."""
+    return metadata.model_copy(
+        update={
+            "themes": _normalize_values(
+                metadata.themes,
+                aliases=THEME_ALIASES,
+                vocabulary=TENTATIVE_THEMES,
+                limit=5,
+            ),
+            "emotions": _normalize_values(
+                metadata.emotions,
+                aliases=EMOTION_ALIASES,
+                vocabulary=TENTATIVE_EMOTIONS,
+                limit=5,
+            ),
+            "people": _normalize_values(metadata.people),
+            "places": _normalize_values(metadata.places),
+            "books": _normalize_values(metadata.books),
+            "key_questions": _normalize_values(metadata.key_questions),
+            "action_items": _normalize_values(metadata.action_items),
+        }
+    )
 
 
 def chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
@@ -123,6 +202,7 @@ def _store_metadata(
     thought: Thought,
     metadata: ExtractedThoughtMetadata,
 ) -> None:
+    metadata = normalize_extracted_metadata(metadata)
     db.add(
         ThoughtMetadata(
             user_id=thought.user_id,
@@ -202,4 +282,3 @@ def process_ai_job(
     except Exception as error:
         db.rollback()
         _set_job_failed(db, job_id, thought_id, error)
-

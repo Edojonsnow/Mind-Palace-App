@@ -11,10 +11,56 @@ class AIProviderError(RuntimeError):
     """Raised when the configured AI provider cannot process a thought."""
 
 
+TENTATIVE_THEMES = (
+    "Work",
+    "Learning",
+    "Health",
+    "Relationships",
+    "Family",
+    "Finances",
+    "Creativity",
+    "Goals",
+    "Decisions",
+    "Personal growth",
+    "Travel",
+    "Spirituality",
+    "Daily life",
+    "Technology",
+    "Projects",
+)
+
+TENTATIVE_EMOTIONS = (
+    "Joy",
+    "Excitement",
+    "Gratitude",
+    "Calm",
+    "Hope",
+    "Love",
+    "Curiosity",
+    "Confidence",
+    "Sadness",
+    "Anxiety",
+    "Fear",
+    "Anger",
+    "Frustration",
+    "Guilt",
+    "Shame",
+    "Loneliness",
+    "Disappointment",
+    "Confusion",
+    "Stress",
+    "Overwhelm",
+    "Pride",
+    "Relief",
+    "Nostalgia",
+    "Boredom",
+)
+
+
 class ExtractedThoughtMetadata(BaseModel):
     summary: str = Field(default="", description="A concise summary of the thought.")
-    themes: list[str] = Field(default_factory=list)
-    emotions: list[str] = Field(default_factory=list)
+    themes: list[str] = Field(default_factory=list, max_length=5)
+    emotions: list[str] = Field(default_factory=list, max_length=5)
     people: list[str] = Field(default_factory=list)
     places: list[str] = Field(default_factory=list)
     books: list[str] = Field(default_factory=list)
@@ -74,7 +120,15 @@ class OpenAIProvider:
                         "content": (
                             "Extract useful, conservative metadata from a personal thought. "
                             "Do not invent people, places, books, emotions, or action items. "
-                            "Return empty arrays when the thought does not support a value."
+                            "Return empty arrays when the thought does not support a value. "
+                            "Return at most five themes, choosing from this tentative vocabulary "
+                            "when appropriate: "
+                            f"{', '.join(TENTATIVE_THEMES)}. "
+                            "Return at most five emotions, choosing from this tentative vocabulary "
+                            "when appropriate: "
+                            f"{', '.join(TENTATIVE_EMOTIONS)}. "
+                            "People and books are open-ended references and should include every "
+                            "supported value."
                         ),
                     },
                     {"role": "user", "content": thought_body},

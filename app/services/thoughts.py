@@ -20,6 +20,30 @@ from app.schemas import ThoughtCreate, ThoughtUpdate, UserSettingsUpdate
 from app.services.ai_processing import purge_ai_artifacts, schedule_ai_processing
 from app.services.data_lifecycle import schedule_thought_purge
 
+DETERMINISTIC_METADATA_FIELDS = {
+    "thought_type",
+    "source_type",
+    "source_title",
+    "source_author",
+    "source_url",
+    "book_title",
+    "book_author",
+    "page_reference",
+    "manual_tags",
+}
+
+
+def normalize_manual_tags(tags: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for tag in tags:
+        cleaned = " ".join(tag.split()).strip()
+        if not cleaned or cleaned.casefold() in seen:
+            continue
+        normalized.append(cleaned)
+        seen.add(cleaned.casefold())
+    return normalized
+
 
 def create_thought(db: Session, user: User, payload: ThoughtCreate) -> Thought:
     if payload.storage_scope is StorageScope.LOCAL_DEVICE:
@@ -46,7 +70,7 @@ def create_thought(db: Session, user: User, payload: ThoughtCreate) -> Thought:
         book_title=payload.book_title,
         book_author=payload.book_author,
         page_reference=payload.page_reference,
-        manual_tags=payload.manual_tags,
+        manual_tags=normalize_manual_tags(payload.manual_tags),
         storage_scope=payload.storage_scope.value,
         use_with_ask_my_mind=use_with_ask,
         is_archived=payload.is_archived,
@@ -236,6 +260,8 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
             value = value.value
         elif key == "source_url" and value is not None:
             value = str(value)
+        elif key == "manual_tags" and value is not None:
+            value = normalize_manual_tags(value)
         setattr(thought, key, value)
 
     db.commit()
@@ -244,8 +270,12 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
     if not thought.use_with_ask_my_mind and was_ai_enabled:
         purge_ai_artifacts(db, thought)
     elif thought.use_with_ask_my_mind and (
-        not was_ai_enabled or "body" in values or thought.ai_processing_status == "failed"
+        not was_ai_enabled
+        or bool(DETERMINISTIC_METADATA_FIELDS.intersection(values))
+        or "body" in values
+        or thought.ai_processing_status == "failed"
     ):
+        purge_ai_artifacts(db, thought)
         schedule_ai_processing(db, thought)
         db.refresh(thought)
     return thought

@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -14,7 +15,7 @@ from app.models import (
     ThoughtChunk,
     ThoughtMetadata,
 )
-from app.services.ai_processing import process_ai_job
+from app.services.ai_processing import normalize_extracted_metadata, process_ai_job
 from app.services.openai_ai import (
     ExtractedThoughtMetadata,
     GeneratedAskAnswer,
@@ -71,6 +72,25 @@ def test_openai_provider_adapts_embeddings_and_structured_metadata() -> None:
 
     assert provider.embed(["first", "second"]) == [[1.0], [2.0]]
     assert provider.extract_metadata("A thought").summary == "Structured result"
+
+
+def test_extracted_metadata_uses_bounded_categories_and_normalizes_values() -> None:
+    with pytest.raises(ValueError):
+        ExtractedThoughtMetadata(themes=["one", "two", "three", "four", "five", "six"])
+
+    metadata = normalize_extracted_metadata(
+        ExtractedThoughtMetadata(
+            themes=["career development", "Work", "  Work  "],
+            emotions=["happy", "Joy"],
+            people=[" Alex ", "Alex", "James Clear"],
+            books=[" Deep Work ", "Deep Work", "Atomic Habits"],
+        )
+    )
+
+    assert metadata.themes == ["Work"]
+    assert metadata.emotions == ["Joy"]
+    assert metadata.people == ["Alex", "James Clear"]
+    assert metadata.books == ["Deep Work", "Atomic Habits"]
 
 
 def test_openai_provider_adapts_structured_ask_answer() -> None:
@@ -177,6 +197,51 @@ def test_worker_creates_chunks_embeddings_and_metadata(
     assert metadata is not None
     assert metadata.summary == "A focused test thought."
     assert metadata.themes == ["testing"]
+
+
+def test_editing_organization_fields_purges_stale_artifacts_and_reschedules(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", no_op_enqueue)
+    response = client.post(
+        "/thoughts",
+        json={
+            "body": "A thought with an original tag.",
+            "manual_tags": ["original"],
+            "use_with_ask_my_mind": True,
+        },
+    )
+    thought_id = UUID(response.json()["id"])
+    first_job = db_session.scalar(select(BackgroundJob))
+    assert first_job is not None
+    process_ai_job(db_session, first_job.id, thought_id, provider_factory=lambda: FakeAIProvider())
+
+    update_response = client.patch(
+        f"/thoughts/{thought_id}",
+        json={"manual_tags": ["edited"]},
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["ai_processing_status"] == AIProcessingStatus.PENDING.value
+    assert db_session.scalars(select(ThoughtChunk)).all() == []
+    assert db_session.scalars(select(ThoughtMetadata)).all() == []
+
+    pending_job = db_session.scalar(
+        select(BackgroundJob).where(BackgroundJob.status == BackgroundJobStatus.PENDING.value)
+    )
+    assert pending_job is not None
+    process_ai_job(
+        db_session,
+        pending_job.id,
+        thought_id,
+        provider_factory=lambda: FakeAIProvider(),
+    )
+
+    metadata = db_session.scalar(select(ThoughtMetadata))
+    assert metadata is not None
+    assert metadata.deterministic_metadata["manual_tags"] == ["edited"]
 
 
 def test_disabling_ai_purges_derived_artifacts(
