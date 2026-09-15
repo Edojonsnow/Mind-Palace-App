@@ -139,6 +139,7 @@ def _thought_filters(
     query: str | None = None,
     thought_type: ThoughtType | None = None,
     source_type: SourceType | None = None,
+    book_id: UUID | None = None,
     tag: str | None = None,
     book: str | None = None,
     theme: str | None = None,
@@ -168,6 +169,8 @@ def _thought_filters(
         filters.append(Thought.thought_type == thought_type.value)
     if source_type is not None:
         filters.append(Thought.source_type == source_type.value)
+    if book_id is not None:
+        filters.append(Thought.book_id == book_id)
     if tag and tag.strip():
         tag_json_value = tag.strip().replace("\\", "\\\\").replace('"', '\\"')
         filters.append(
@@ -211,6 +214,7 @@ def list_thoughts(
     query: str | None = None,
     thought_type: ThoughtType | None = None,
     source_type: SourceType | None = None,
+    book_id: UUID | None = None,
     tag: str | None = None,
     book: str | None = None,
     theme: str | None = None,
@@ -234,6 +238,7 @@ def list_thoughts(
         query=query,
         thought_type=thought_type,
         source_type=source_type,
+        book_id=book_id,
         tag=tag,
         book=book,
         theme=theme,

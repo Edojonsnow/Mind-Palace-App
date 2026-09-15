@@ -169,6 +169,36 @@ def test_recall_book_filter_includes_ai_detected_books(
     assert [item["title"] for item in response.json()] == ["Reading reflection"]
 
 
+def test_recall_filters_by_saved_book_id(client: TestClient) -> None:
+    first_book = client.post(
+        "/books",
+        json={"title": "Circe", "author": "Madeline Miller"},
+    ).json()
+    second_book = client.post(
+        "/books",
+        json={"title": "Piranesi", "author": "Susanna Clarke"},
+    ).json()
+    create_thought(
+        client,
+        title="Circe excerpt",
+        body="A saved excerpt from Circe.",
+        thought_type="book_excerpt",
+        book_id=first_book["id"],
+    )
+    create_thought(
+        client,
+        title="Piranesi excerpt",
+        body="A saved excerpt from Piranesi.",
+        thought_type="book_excerpt",
+        book_id=second_book["id"],
+    )
+
+    response = client.get("/thoughts", params={"book_id": first_book["id"]})
+
+    assert response.status_code == 200
+    assert [item["title"] for item in response.json()] == ["Circe excerpt"]
+
+
 def test_recall_paginates_deterministically(client: TestClient) -> None:
     created = [create_thought(client, title=f"Thought {index}") for index in range(3)]
 
