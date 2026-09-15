@@ -136,6 +136,39 @@ def test_recall_filters_by_generated_theme_and_emotion(
     assert [thought["title"] for thought in combined_response.json()] == ["Focus reflection"]
 
 
+def test_recall_book_filter_includes_ai_detected_books(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    thought = create_thought(
+        client,
+        title="Reading reflection",
+        body="A note about a book.",
+        use_with_ask_my_mind=False,
+    )
+    db_session.add(
+        ThoughtMetadata(
+            user_id=UUID(thought["user_id"]),
+            thought_id=UUID(thought["id"]),
+            summary=None,
+            themes=[],
+            emotions=[],
+            people=[],
+            places=[],
+            books=["Deep Work"],
+            key_questions=[],
+            action_items=[],
+            deterministic_metadata={},
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/thoughts", params={"book": "deep work"})
+
+    assert response.status_code == 200
+    assert [item["title"] for item in response.json()] == ["Reading reflection"]
+
+
 def test_recall_paginates_deterministically(client: TestClient) -> None:
     created = [create_thought(client, title=f"Thought {index}") for index in range(3)]
 

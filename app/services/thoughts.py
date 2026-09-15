@@ -148,6 +148,7 @@ def _thought_filters(
             or_(
                 Thought.book_title.ilike(pattern, escape="\\"),
                 Thought.book_author.ilike(pattern, escape="\\"),
+                _metadata_contains(ThoughtMetadata.books, book),
             )
         )
 
