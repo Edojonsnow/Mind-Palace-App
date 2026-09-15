@@ -26,5 +26,5 @@ class User(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     thoughts = relationship("Thought", back_populates="user")
+    books = relationship("Book", back_populates="user", cascade="all, delete-orphan")
     settings = relationship("UserSettings", back_populates="user", uselist=False)
-

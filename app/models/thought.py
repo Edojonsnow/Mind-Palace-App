@@ -50,6 +50,10 @@ class Thought(Base):
     source_title: Mapped[str | None] = mapped_column(String(255))
     source_author: Mapped[str | None] = mapped_column(String(255))
     source_url: Mapped[str | None] = mapped_column(String(2048))
+    book_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("books.id", ondelete="SET NULL"),
+        index=True,
+    )
     book_title: Mapped[str | None] = mapped_column(String(255))
     book_author: Mapped[str | None] = mapped_column(String(255))
     page_reference: Mapped[str | None] = mapped_column(String(100))
@@ -74,6 +78,7 @@ class Thought(Base):
     purge_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     user = relationship("User", back_populates="thoughts")
+    book = relationship("Book", back_populates="thoughts")
     chunks = relationship("ThoughtChunk", back_populates="thought", cascade="all, delete-orphan")
     metadata_record = relationship(
         "ThoughtMetadata",

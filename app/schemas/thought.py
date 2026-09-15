@@ -15,6 +15,7 @@ class ThoughtCreate(BaseModel):
     source_title: str | None = Field(default=None, max_length=255)
     source_author: str | None = Field(default=None, max_length=255)
     source_url: HttpUrl | None = None
+    book_id: UUID | None = None
     book_title: str | None = Field(default=None, max_length=255)
     book_author: str | None = Field(default=None, max_length=255)
     page_reference: str | None = Field(default=None, max_length=100)
@@ -32,6 +33,7 @@ class ThoughtUpdate(BaseModel):
     source_title: str | None = Field(default=None, max_length=255)
     source_author: str | None = Field(default=None, max_length=255)
     source_url: HttpUrl | None = None
+    book_id: UUID | None = None
     book_title: str | None = Field(default=None, max_length=255)
     book_author: str | None = Field(default=None, max_length=255)
     page_reference: str | None = Field(default=None, max_length=100)
@@ -66,6 +68,7 @@ class ThoughtRead(BaseModel):
     source_title: str | None
     source_author: str | None
     source_url: str | None
+    book_id: UUID | None
     book_title: str | None
     book_author: str | None
     page_reference: str | None

@@ -11,6 +11,7 @@ from app.models import (
     AccountDeletionRequest,
     AccountDeletionStatus,
     BackgroundJob,
+    Book,
     ChatConversation,
     ChatMessage,
     ExportRequest,
@@ -100,6 +101,7 @@ def purge_user_data(db: Session, user: User) -> None:
     db.execute(delete(AccountDeletionRequest).where(AccountDeletionRequest.user_id == user.id))
     db.execute(delete(UserSettings).where(UserSettings.user_id == user.id))
     db.execute(delete(Thought).where(Thought.user_id == user.id))
+    db.execute(delete(Book).where(Book.user_id == user.id))
     db.delete(user)
     db.commit()
 

@@ -7,6 +7,7 @@ from app.models.ai import (
     ThoughtChunk,
     ThoughtMetadata,
 )
+from app.models.book import Book
 from app.models.chat import ChatConversation, ChatMessage, ChatMessageRole
 from app.models.lifecycle import (
     AccountDeletionRequest,
@@ -30,6 +31,7 @@ __all__ = [
     "BackgroundJob",
     "BackgroundJobStatus",
     "BackgroundJobType",
+    "Book",
     "Thought",
     "ThoughtChunk",
     "ThoughtMetadata",
