@@ -18,6 +18,5 @@ def get_or_create_user(db: Session, authenticated_user: AuthenticatedUser) -> Us
     db.flush()
 
     db.add(UserSettings(user_id=user.id))
-    db.commit()
-    db.refresh(user)
+    db.flush()
     return user
