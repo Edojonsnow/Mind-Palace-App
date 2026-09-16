@@ -163,19 +163,30 @@ def create_export_request(db: Session, user: User) -> ExportRequest:
     db.add(job)
     db.flush()
 
+    db.commit()
+
     try:
         from app.core.queue import enqueue_export_generation
 
         enqueue_export_generation(export.id, job.id)
     except Exception as error:
         db.rollback()
+        export = db.get(ExportRequest, export.id)
+        job = db.get(BackgroundJob, job.id)
+        if export is not None:
+            export.status = ExportRequestStatus.FAILED.value
+            export.error_message = type(error).__name__
+        if job is not None:
+            job.status = BackgroundJobStatus.FAILED.value
+            job.error_message = type(error).__name__
+            job.completed_at = datetime.now(UTC)
+        db.commit()
         logger.warning("Unable to schedule export: error_type=%s", type(error).__name__)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Export service is temporarily unavailable",
         ) from error
 
-    db.commit()
     db.refresh(export)
     return export
 

@@ -145,6 +145,29 @@ def test_export_is_generated_and_downloadable(
     assert download_response.json()["thoughts"][0]["body"] == "Include this in the export."
 
 
+def test_export_dispatch_failure_preserves_failed_records(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    def fail_dispatch(*args):
+        raise RuntimeError("queue unavailable")
+
+    monkeypatch.setattr("app.core.queue.enqueue_export_generation", fail_dispatch)
+
+    response = client.post("/exports")
+
+    assert response.status_code == 503
+    export = db_session.scalar(select(ExportRequest))
+    job = db_session.scalar(
+        select(BackgroundJob).where(BackgroundJob.job_type == "generate_export")
+    )
+    assert export is not None
+    assert export.status == "failed"
+    assert job is not None
+    assert job.status == "failed"
+
+
 def test_account_deletion_can_be_cancelled_and_resubmitted(
     client: TestClient,
     db_session: Session,
@@ -171,3 +194,21 @@ def test_account_deletion_can_be_cancelled_and_resubmitted(
     process_account_deletion(db_session, request.id)
 
     assert db_session.get(User, user.id) is None
+
+
+def test_account_deletion_dispatch_failure_preserves_failed_request(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    def fail_dispatch(*args):
+        raise RuntimeError("queue unavailable")
+
+    monkeypatch.setattr("app.core.queue.enqueue_account_deletion", fail_dispatch)
+
+    response = client.post("/account/deletion")
+
+    assert response.status_code == 503
+    request = db_session.scalar(select(AccountDeletionRequest))
+    assert request is not None
+    assert request.status == "failed"

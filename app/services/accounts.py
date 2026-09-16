@@ -47,12 +47,19 @@ def create_account_deletion_request(db: Session, user: User) -> AccountDeletionR
     )
     db.add(request)
     db.flush()
+    db.commit()
+
     try:
         from app.core.queue import enqueue_account_deletion
 
         enqueue_account_deletion(request.id, request.purge_at)
     except Exception as error:
         db.rollback()
+        request = db.get(AccountDeletionRequest, request.id)
+        if request is not None:
+            request.status = AccountDeletionStatus.FAILED.value
+            request.error_message = type(error).__name__
+            db.commit()
         logger.warning(
             "Unable to schedule account deletion: error_type=%s",
             type(error).__name__,
@@ -62,7 +69,6 @@ def create_account_deletion_request(db: Session, user: User) -> AccountDeletionR
             detail="Account deletion service is temporarily unavailable",
         ) from error
 
-    db.commit()
     db.refresh(request)
     return request
 

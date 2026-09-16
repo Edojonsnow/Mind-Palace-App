@@ -37,6 +37,7 @@ class AccountDeletionStatus(StrEnum):
     PENDING = "pending"
     CANCELLED = "cancelled"
     COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class AccountDeletionRequest(Base):
