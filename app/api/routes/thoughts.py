@@ -3,11 +3,9 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Query, Response, status
 
-from app.core.auth import AuthenticatedUser, get_current_user
-from app.db.session import get_db
+from app.api.dependencies import CurrentUser, DbSession
 from app.models import SourceType, ThoughtType
 from app.schemas import ThoughtCreate, ThoughtRead, ThoughtUpdate
 from app.services.data_lifecycle import list_deleted_thoughts, restore_thought
@@ -20,7 +18,6 @@ from app.services.thoughts import (
     soft_delete_thought,
     update_thought,
 )
-from app.services.users import get_or_create_user
 
 router = APIRouter(prefix="/thoughts", tags=["thoughts"])
 logger = logging.getLogger(__name__)
@@ -29,17 +26,16 @@ logger = logging.getLogger(__name__)
 @router.post("", response_model=ThoughtRead, status_code=status.HTTP_201_CREATED)
 def create_thought_route(
     payload: ThoughtCreate,
-    db: Annotated[Session, Depends(get_db)],
-    authenticated_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: DbSession,
+    user: CurrentUser,
 ):
-    user = get_or_create_user(db, authenticated_user)
     return create_thought(db, user, payload)
 
 
 @router.get("", response_model=list[ThoughtRead])
 def list_thoughts_route(
-    db: Annotated[Session, Depends(get_db)],
-    authenticated_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: DbSession,
+    user: CurrentUser,
     response: Response,
     q: Annotated[str | None, Query(max_length=200)] = None,
     thought_type: ThoughtType | None = None,
@@ -75,7 +71,6 @@ def list_thoughts_route(
         page,
         page_size,
     )
-    user = get_or_create_user(db, authenticated_user)
     result = list_thoughts(
         db,
         user,
@@ -113,20 +108,18 @@ def list_thoughts_route(
 
 @router.get("/deleted", response_model=list[ThoughtRead])
 def list_deleted_thoughts_route(
-    db: Annotated[Session, Depends(get_db)],
-    authenticated_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: DbSession,
+    user: CurrentUser,
 ):
-    user = get_or_create_user(db, authenticated_user)
     return list_deleted_thoughts(db, user)
 
 
 @router.get("/{thought_id}", response_model=ThoughtRead)
 def get_thought_route(
     thought_id: UUID,
-    db: Annotated[Session, Depends(get_db)],
-    authenticated_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: DbSession,
+    user: CurrentUser,
 ):
-    user = get_or_create_user(db, authenticated_user)
     return get_thought(db, user, thought_id)
 
 
@@ -134,20 +127,18 @@ def get_thought_route(
 def update_thought_route(
     thought_id: UUID,
     payload: ThoughtUpdate,
-    db: Annotated[Session, Depends(get_db)],
-    authenticated_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: DbSession,
+    user: CurrentUser,
 ):
-    user = get_or_create_user(db, authenticated_user)
     return update_thought(db, user, thought_id, payload)
 
 
 @router.delete("/{thought_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_thought_route(
     thought_id: UUID,
-    db: Annotated[Session, Depends(get_db)],
-    authenticated_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: DbSession,
+    user: CurrentUser,
 ):
-    user = get_or_create_user(db, authenticated_user)
     soft_delete_thought(db, user, thought_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -155,18 +146,16 @@ def delete_thought_route(
 @router.post("/{thought_id}/organize", response_model=ThoughtRead)
 def retry_ai_processing_route(
     thought_id: UUID,
-    db: Annotated[Session, Depends(get_db)],
-    authenticated_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: DbSession,
+    user: CurrentUser,
 ):
-    user = get_or_create_user(db, authenticated_user)
     return retry_ai_processing(db, user, thought_id)
 
 
 @router.post("/{thought_id}/restore", response_model=ThoughtRead)
 def restore_thought_route(
     thought_id: UUID,
-    db: Annotated[Session, Depends(get_db)],
-    authenticated_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    db: DbSession,
+    user: CurrentUser,
 ):
-    user = get_or_create_user(db, authenticated_user)
     return restore_thought(db, user, thought_id)
