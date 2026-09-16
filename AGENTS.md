@@ -25,6 +25,7 @@ Use the repository virtual environment, especially if a global Anaconda Python i
 .venv/bin/ruff check .
 .venv/bin/pytest
 python3 -m compileall app migrations scripts tests
+.venv/bin/python scripts/export_openapi.py
 ```
 
 Run migrations only when intentionally applying schema changes to the active `DATABASE_URL`:
@@ -67,6 +68,18 @@ Keep user-owned reads and writes scoped by the authenticated user.
 
 ## Commit Messages
 
+- For fixes and updates, use these body headers exactly:
+
+  ```text
+  ## Problem
+  <what was wrong or needed>
+
+  ## Solution
+  <what this commit implemented>
+  ```
+
+- A genuinely new feature may use an imperative `feat:` subject without those
+  headers.
 - Use an imperative subject that clearly names the change.
 - Include a short body explaining the main implementation details, user-facing impact, and verification when relevant.
 - Avoid one-line-only commit messages for implementation work.

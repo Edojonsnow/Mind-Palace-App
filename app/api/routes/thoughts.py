@@ -12,6 +12,7 @@ from app.models import SourceType, ThoughtType
 from app.schemas import ThoughtCreate, ThoughtRead, ThoughtUpdate
 from app.services.data_lifecycle import list_deleted_thoughts, restore_thought
 from app.services.thoughts import (
+    RecallQuery,
     create_thought,
     get_thought,
     list_thoughts,
@@ -78,21 +79,23 @@ def list_thoughts_route(
     result = list_thoughts(
         db,
         user,
-        query=q,
-        thought_type=thought_type,
-        source_type=source_type,
-        book_id=book_id,
-        tag=tag,
-        book=book,
-        theme=theme,
-        emotion=emotion,
-        person=person,
-        place=place,
-        is_archived=is_archived,
-        created_from=created_from,
-        created_to=created_to,
-        page=page,
-        page_size=page_size,
+        RecallQuery(
+            query=q,
+            thought_type=thought_type,
+            source_type=source_type,
+            book_id=book_id,
+            tag=tag,
+            book=book,
+            theme=theme,
+            emotion=emotion,
+            person=person,
+            place=place,
+            is_archived=is_archived,
+            created_from=created_from,
+            created_to=created_to,
+            page=page,
+            page_size=page_size,
+        ),
     )
     response.headers["X-Total-Count"] = str(result.total)
     response.headers["X-Page"] = str(page)
