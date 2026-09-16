@@ -9,11 +9,10 @@ from app.api.dependencies import CurrentUser, DbSession
 from app.models import SourceType, ThoughtType
 from app.schemas import ThoughtCreate, ThoughtRead, ThoughtUpdate
 from app.services.data_lifecycle import list_deleted_thoughts, restore_thought
+from app.services.thought_recall import RecallQuery, list_thoughts
 from app.services.thoughts import (
-    RecallQuery,
     create_thought,
     get_thought,
-    list_thoughts,
     retry_ai_processing,
     soft_delete_thought,
     update_thought,
