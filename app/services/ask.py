@@ -23,7 +23,7 @@ from app.services.openai_ai import (
     GeneratedAskAnswer,
     OpenAIProvider,
 )
-from app.services.thoughts import get_user_settings
+from app.services.settings import get_user_settings
 
 logger = logging.getLogger(__name__)
 

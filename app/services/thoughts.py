@@ -14,12 +14,12 @@ from app.models import (
     ThoughtMetadata,
     ThoughtType,
     User,
-    UserSettings,
 )
-from app.schemas import BookCreate, ThoughtCreate, ThoughtUpdate, UserSettingsUpdate
+from app.schemas import BookCreate, ThoughtCreate, ThoughtUpdate
 from app.services.ai_processing import purge_ai_artifacts, schedule_ai_processing
 from app.services.books import get_book, get_or_create_book
 from app.services.data_lifecycle import schedule_thought_purge
+from app.services.settings import get_user_settings
 
 DETERMINISTIC_METADATA_FIELDS = {
     "thought_type",
@@ -360,29 +360,3 @@ def soft_delete_thought(db: Session, user: User, thought_id: UUID) -> None:
     db.commit()
     db.refresh(thought)
     schedule_thought_purge(db, thought)
-
-
-def get_user_settings(db: Session, user: User) -> UserSettings:
-    settings = db.scalar(select(UserSettings).where(UserSettings.user_id == user.id))
-    if settings is not None:
-        return settings
-
-    settings = UserSettings(user_id=user.id)
-    db.add(settings)
-    db.commit()
-    db.refresh(settings)
-    return settings
-
-
-def update_user_settings(
-    db: Session,
-    user: User,
-    payload: UserSettingsUpdate,
-) -> UserSettings:
-    settings = get_user_settings(db, user)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(settings, key, value)
-
-    db.commit()
-    db.refresh(settings)
-    return settings

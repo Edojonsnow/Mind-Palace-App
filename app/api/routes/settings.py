@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import AuthenticatedUser, get_current_user
 from app.db.session import get_db
 from app.schemas import UserSettingsRead, UserSettingsUpdate
-from app.services.thoughts import get_user_settings, update_user_settings
+from app.services.settings import get_user_settings, update_user_settings
 from app.services.users import get_or_create_user
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -29,4 +29,3 @@ def update_settings_route(
 ):
     user = get_or_create_user(db, authenticated_user)
     return update_user_settings(db, user, payload)
-
