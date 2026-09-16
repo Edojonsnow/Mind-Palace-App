@@ -110,11 +110,9 @@ def create_thought(db: Session, user: User, payload: ThoughtCreate) -> Thought:
         is_archived=payload.is_archived,
     )
     db.add(thought)
-    db.commit()
-    db.refresh(thought)
+    db.flush()
     if thought.use_with_ask_my_mind:
         schedule_ai_processing(db, thought)
-        db.refresh(thought)
     return thought
 
 
@@ -321,8 +319,7 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
             value = normalize_manual_tags(value)
         setattr(thought, key, value)
 
-    db.commit()
-    db.refresh(thought)
+    db.flush()
 
     if not thought.use_with_ask_my_mind and was_ai_enabled:
         purge_ai_artifacts(db, thought)
@@ -334,7 +331,6 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
     ):
         purge_ai_artifacts(db, thought)
         schedule_ai_processing(db, thought)
-        db.refresh(thought)
     return thought
 
 
@@ -357,6 +353,5 @@ def soft_delete_thought(db: Session, user: User, thought_id: UUID) -> None:
     deleted_at = datetime.now(UTC)
     thought.deleted_at = deleted_at
     thought.purge_at = deleted_at + timedelta(days=settings.recovery_window_days)
-    db.commit()
-    db.refresh(thought)
+    db.flush()
     schedule_thought_purge(db, thought)

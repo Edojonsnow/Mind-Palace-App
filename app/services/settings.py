@@ -12,8 +12,7 @@ def get_user_settings(db: Session, user: User) -> UserSettings:
 
     settings = UserSettings(user_id=user.id)
     db.add(settings)
-    db.commit()
-    db.refresh(settings)
+    db.flush()
     return settings
 
 
@@ -26,6 +25,5 @@ def update_user_settings(
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(settings, key, value)
 
-    db.commit()
-    db.refresh(settings)
+    db.flush()
     return settings

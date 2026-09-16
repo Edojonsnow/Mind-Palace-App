@@ -42,8 +42,7 @@ def get_or_create_book(db: Session, user: User, payload: BookCreate) -> Book:
         normalized_author=normalized_author,
     )
     db.add(book)
-    db.commit()
-    db.refresh(book)
+    db.flush()
     return book
 
 
