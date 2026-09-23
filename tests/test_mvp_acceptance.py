@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import BackgroundJob, User
+from app.models import BackgroundJob, ThoughtMetadata, User
 from app.services.ai_processing import process_ai_job
 from app.services.openai_ai import ExtractedThoughtMetadata, GeneratedAskAnswer
 
@@ -82,13 +82,18 @@ def test_mvp_workflow_covers_capture_organization_recall_ask_and_restore(
         provider_factory=FakeOrganizationProvider,
     )
 
-    recall_response = client.get("/thoughts", params={"theme": "Work"})
+    recall_response = client.get("/thoughts", params={"q": "focused work"})
     assert recall_response.status_code == 200
     recalled = recall_response.json()
     assert len(recalled) == 1
     assert recalled[0]["id"] == str(thought_id)
-    assert recalled[0]["ai_metadata"]["themes"] == ["Work"]
-    assert recalled[0]["ai_metadata"]["emotions"] == ["Joy"]
+    assert "ai_metadata" not in recalled[0]
+    metadata = db_session.scalar(
+        select(ThoughtMetadata).where(ThoughtMetadata.thought_id == thought_id)
+    )
+    assert metadata is not None
+    assert metadata.themes == ["career development"]
+    assert metadata.emotions == ["Joy"]
 
     remember_response = client.get("/remember")
     assert remember_response.status_code == 200
@@ -103,11 +108,11 @@ def test_mvp_workflow_covers_capture_organization_recall_ask_and_restore(
 
     delete_response = client.delete(f"/thoughts/{thought_id}")
     assert delete_response.status_code == 204
-    assert client.get("/thoughts", params={"theme": "Work"}).json() == []
+    assert client.get("/thoughts", params={"q": "focused work"}).json() == []
     assert client.get("/remember").json()["thoughts_analyzed"] == 0
 
     restore_response = client.post(f"/thoughts/{thought_id}/restore")
     assert restore_response.status_code == 200
     assert restore_response.json()["deleted_at"] is None
-    assert len(client.get("/thoughts", params={"theme": "Work"}).json()) == 1
+    assert len(client.get("/thoughts", params={"q": "focused work"}).json()) == 1
     assert client.post("/ask", json={"question": "What should I protect?"}).json()["sources"]

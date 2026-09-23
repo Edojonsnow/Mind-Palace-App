@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -7,7 +9,7 @@ class RememberItem(BaseModel):
 
 
 class RememberCategory(BaseModel):
-    key: str
+    key: Literal["tags", "books"]
     label: str
     items: list[RememberItem]
 

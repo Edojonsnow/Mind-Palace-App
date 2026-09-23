@@ -1,17 +1,8 @@
 from app.models import Thought
 from app.services.openai_ai import (
     TENTATIVE_EMOTIONS,
-    TENTATIVE_THEMES,
     ExtractedThoughtMetadata,
 )
-
-THEME_ALIASES = {
-    "career": "Work",
-    "career development": "Work",
-    "professional growth": "Work",
-    "self improvement": "Personal growth",
-    "self-improvement": "Personal growth",
-}
 
 EMOTION_ALIASES = {
     "happy": "Joy",
@@ -60,8 +51,6 @@ def normalize_extracted_metadata(metadata: ExtractedThoughtMetadata) -> Extracte
         update={
             "themes": _normalize_values(
                 metadata.themes,
-                aliases=THEME_ALIASES,
-                vocabulary=TENTATIVE_THEMES,
                 limit=5,
             ),
             "emotions": _normalize_values(

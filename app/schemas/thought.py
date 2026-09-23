@@ -81,6 +81,5 @@ class ThoughtRead(BaseModel):
     updated_at: datetime
     deleted_at: datetime | None
     purge_at: datetime | None
-    ai_metadata: ThoughtMetadataRead | None = None
 
     model_config = ConfigDict(from_attributes=True)

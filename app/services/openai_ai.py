@@ -11,24 +11,6 @@ class AIProviderError(RuntimeError):
     """Raised when the configured AI provider cannot process a thought."""
 
 
-TENTATIVE_THEMES = (
-    "Work",
-    "Learning",
-    "Health",
-    "Relationships",
-    "Family",
-    "Finances",
-    "Creativity",
-    "Goals",
-    "Decisions",
-    "Personal growth",
-    "Travel",
-    "Spirituality",
-    "Daily life",
-    "Technology",
-    "Projects",
-)
-
 TENTATIVE_EMOTIONS = (
     "Joy",
     "Excitement",
@@ -121,9 +103,10 @@ class OpenAIProvider:
                             "Extract useful, conservative metadata from a personal thought. "
                             "Do not invent people, places, books, emotions, or action items. "
                             "Return empty arrays when the thought does not support a value. "
-                            "Return at most five themes, choosing from this tentative vocabulary "
-                            "when appropriate: "
-                            f"{', '.join(TENTATIVE_THEMES)}. "
+                            "Return at most five concise, open-ended themes or concepts that are "
+                            "supported by the thought. Do not force the thought into a fixed "
+                            "taxonomy and do not reuse a generic category when a more precise "
+                            "concept is supported. "
                             "Return at most five emotions, choosing from this tentative vocabulary "
                             "when appropriate: "
                             f"{', '.join(TENTATIVE_EMOTIONS)}. "

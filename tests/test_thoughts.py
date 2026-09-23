@@ -27,7 +27,7 @@ def test_create_thought_defaults_ai_participation_off(client: TestClient) -> Non
     assert body["storage_scope"] == "cloud"
     assert body["use_with_ask_my_mind"] is False
     assert body["manual_tags"] == ["product"]
-    assert body["ai_metadata"] is None
+    assert "ai_metadata" not in body
 
 
 def test_manual_tags_are_trimmed_and_deduplicated_without_a_count_limit(
@@ -42,7 +42,7 @@ def test_manual_tags_are_trimmed_and_deduplicated_without_a_count_limit(
     assert response.json()["manual_tags"] == ["work", "ideas"]
 
 
-def test_thought_response_includes_generated_metadata(
+def test_thought_response_keeps_generated_metadata_private(
     client: TestClient,
     db_session: Session,
 ) -> None:
@@ -67,19 +67,8 @@ def test_thought_response_includes_generated_metadata(
     response = client.get(f"/thoughts/{thought['id']}")
 
     assert response.status_code == 200
-    assert response.json()["ai_metadata"] == {
-        "summary": "A focused work reflection.",
-        "themes": ["Focus"],
-        "emotions": ["Calm"],
-        "people": [],
-        "places": [],
-        "books": [],
-        "key_questions": ["How can I protect focus?"],
-        "action_items": ["Block focused work time."],
-        "deterministic_metadata": {"thought_type": "thought"},
-        "created_at": response.json()["ai_metadata"]["created_at"],
-        "updated_at": response.json()["ai_metadata"]["updated_at"],
-    }
+    assert "ai_metadata" not in response.json()
+    assert db_session.query(ThoughtMetadata).count() == 1
 
 
 def test_create_thought_rejects_local_device_storage(client: TestClient) -> None:
@@ -157,7 +146,7 @@ def test_organize_retries_ai_processing_for_enabled_thought(
 
     assert response.status_code == 200
     assert response.json()["ai_processing_status"] == "pending"
-    assert response.json()["ai_metadata"] is None
+    assert "ai_metadata" not in response.json()
     assert db_session.query(ThoughtMetadata).count() == 0
 
 

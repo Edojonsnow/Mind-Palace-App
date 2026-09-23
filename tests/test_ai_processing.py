@@ -74,7 +74,7 @@ def test_openai_provider_adapts_embeddings_and_structured_metadata() -> None:
     assert provider.extract_metadata("A thought").summary == "Structured result"
 
 
-def test_extracted_metadata_uses_bounded_categories_and_normalizes_values() -> None:
+def test_extracted_metadata_keeps_open_ended_themes_and_normalizes_values() -> None:
     with pytest.raises(ValueError):
         ExtractedThoughtMetadata(themes=["one", "two", "three", "four", "five", "six"])
 
@@ -87,7 +87,7 @@ def test_extracted_metadata_uses_bounded_categories_and_normalizes_values() -> N
         )
     )
 
-    assert metadata.themes == ["Work"]
+    assert metadata.themes == ["career development", "Work"]
     assert metadata.emotions == ["Joy"]
     assert metadata.people == ["Alex", "James Clear"]
     assert metadata.books == ["Deep Work", "Atomic Habits"]
