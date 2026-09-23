@@ -1,30 +1,12 @@
 from app.models import Thought
-from app.services.openai_ai import (
-    TENTATIVE_EMOTIONS,
-    ExtractedThoughtMetadata,
-)
-
-EMOTION_ALIASES = {
-    "happy": "Joy",
-    "happiness": "Joy",
-    "excited": "Excitement",
-    "grateful": "Gratitude",
-    "thankful": "Gratitude",
-    "worried": "Anxiety",
-    "anxious": "Anxiety",
-    "frustrated": "Frustration",
-    "overwhelmed": "Overwhelm",
-}
+from app.services.openai_ai import ExtractedThoughtMetadata
 
 
 def _normalize_values(
     values: list[str],
     *,
-    aliases: dict[str, str] | None = None,
-    vocabulary: tuple[str, ...] = (),
     limit: int | None = None,
 ) -> list[str]:
-    canonical_vocabulary = {value.casefold(): value for value in vocabulary}
     normalized: list[str] = []
     seen: set[str] = set()
 
@@ -32,12 +14,10 @@ def _normalize_values(
         cleaned = " ".join(value.split()).strip()
         if not cleaned:
             continue
-        key = cleaned.casefold()
-        canonical = (aliases or {}).get(key) or canonical_vocabulary.get(key) or cleaned
-        canonical_key = canonical.casefold()
+        canonical_key = cleaned.casefold()
         if canonical_key in seen:
             continue
-        normalized.append(canonical)
+        normalized.append(cleaned)
         seen.add(canonical_key)
         if limit is not None and len(normalized) >= limit:
             break
@@ -55,8 +35,6 @@ def normalize_extracted_metadata(metadata: ExtractedThoughtMetadata) -> Extracte
             ),
             "emotions": _normalize_values(
                 metadata.emotions,
-                aliases=EMOTION_ALIASES,
-                vocabulary=TENTATIVE_EMOTIONS,
                 limit=5,
             ),
             "people": _normalize_values(metadata.people),
@@ -92,6 +70,32 @@ def chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
         start = max(end - overlap, start + 1)
 
     return chunks
+
+
+def semantic_text(thought: Thought) -> str:
+    """Build the private semantic representation used for AI enrichment."""
+    sections: list[str] = []
+
+    def add_section(label: str, value: object) -> None:
+        if isinstance(value, list):
+            cleaned = [" ".join(str(item).split()).strip() for item in value if str(item).strip()]
+            value = ", ".join(cleaned)
+        if value is None:
+            return
+        cleaned_value = " ".join(str(value).split()).strip()
+        if cleaned_value:
+            sections.append(f"{label}: {cleaned_value}")
+
+    add_section("Title", thought.title)
+    add_section("Thought", thought.body)
+    add_section("Source type", thought.source_type)
+    add_section("Source title", thought.source_title)
+    add_section("Source author", thought.source_author)
+    add_section("Book", thought.book_title)
+    add_section("Book author", thought.book_author)
+    add_section("Page", thought.page_reference)
+    add_section("Tags", thought.manual_tags)
+    return "\n".join(sections)
 
 
 def deterministic_metadata(thought: Thought) -> dict[str, object]:

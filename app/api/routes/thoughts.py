@@ -6,9 +6,11 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Response, status
 
 from app.api.dependencies import CurrentUser, DbSession
+from app.core.config import settings
 from app.models import SourceType, ThoughtType
 from app.schemas import ThoughtCreate, ThoughtRead, ThoughtUpdate
 from app.services.data_lifecycle import list_deleted_thoughts, restore_thought
+from app.services.openai_ai import OpenAIProvider
 from app.services.thought_recall import RecallQuery, list_thoughts
 from app.services.thoughts import (
     create_thought,
@@ -70,6 +72,15 @@ def list_thoughts_route(
         page,
         page_size,
     )
+    query_embedding = None
+    if q and q.strip() and settings.openai_api_key:
+        try:
+            query_embedding = OpenAIProvider().embed([q.strip()])[0]
+        except Exception as error:
+            logger.warning(
+                "Recall semantic search unavailable: error_type=%s",
+                type(error).__name__,
+            )
     result = list_thoughts(
         db,
         user,
@@ -90,6 +101,7 @@ def list_thoughts_route(
             page=page,
             page_size=page_size,
         ),
+        query_embedding=query_embedding,
     )
     response.headers["X-Total-Count"] = str(result.total)
     response.headers["X-Page"] = str(page)

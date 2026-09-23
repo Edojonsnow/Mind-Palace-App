@@ -1,3 +1,5 @@
+import math
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -6,7 +8,15 @@ from fastapi import HTTPException, status
 from sqlalchemy import Text, and_, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import SourceType, Thought, ThoughtMetadata, ThoughtType, User
+from app.models import (
+    AIProcessingStatus,
+    SourceType,
+    Thought,
+    ThoughtChunk,
+    ThoughtMetadata,
+    ThoughtType,
+    User,
+)
 
 
 @dataclass(frozen=True)
@@ -17,7 +27,7 @@ class ThoughtListResult:
 
 @dataclass(frozen=True)
 class RecallQuery:
-    """Product-level query for deterministic thought recall."""
+    """Product-level query for hybrid thought recall."""
 
     query: str | None = None
     thought_type: ThoughtType | None = None
@@ -45,10 +55,10 @@ def _metadata_contains(column, value: str):
     return cast(column, Text).ilike(_like_pattern(f'"{value.strip()}"'), escape="\\")
 
 
-def _thought_filters(user: User, recall_query: RecallQuery):
+def _thought_filters(user: User, recall_query: RecallQuery, *, include_query: bool = True):
     filters = [Thought.user_id == user.id, Thought.deleted_at.is_(None)]
 
-    if recall_query.query and recall_query.query.strip():
+    if include_query and recall_query.query and recall_query.query.strip():
         pattern = _like_pattern(recall_query.query)
         filters.append(
             or_(
@@ -103,7 +113,88 @@ def _thought_filters(user: User, recall_query: RecallQuery):
     return filters
 
 
-def list_thoughts(db: Session, user: User, recall_query: RecallQuery) -> ThoughtListResult:
+def _cosine_similarity(left: list[float], right: list[float]) -> float:
+    left_norm = math.sqrt(sum(value * value for value in left))
+    right_norm = math.sqrt(sum(value * value for value in right))
+    if left_norm == 0 or right_norm == 0:
+        return 0.0
+    return sum(a * b for a, b in zip(left, right, strict=True)) / (left_norm * right_norm)
+
+
+def _lexical_score(thought: Thought, query: str) -> float:
+    terms = set(re.findall(r"[\w']+", query.casefold()))
+    if not terms:
+        return 0.0
+    searchable = " ".join(
+        value
+        for value in (
+            thought.title,
+            thought.body,
+            thought.source_title,
+            thought.source_author,
+            thought.book_title,
+            thought.book_author,
+            " ".join(thought.manual_tags),
+        )
+        if value
+    ).casefold()
+    matched_terms = sum(term in searchable for term in terms)
+    phrase_bonus = 0.15 if query.casefold().strip() in searchable else 0.0
+    return min(1.0, matched_terms / len(terms) + phrase_bonus)
+
+
+def _semantic_scores(
+    db: Session,
+    user: User,
+    query_embedding: list[float],
+    thought_ids: set[UUID],
+) -> dict[UUID, float]:
+    if not thought_ids:
+        return {}
+    statement = (
+        select(ThoughtChunk.thought_id, ThoughtChunk.embedding)
+        .join(Thought, ThoughtChunk.thought_id == Thought.id)
+        .where(
+            ThoughtChunk.user_id == user.id,
+            ThoughtChunk.thought_id.in_(thought_ids),
+            ThoughtChunk.deleted_at.is_(None),
+            Thought.use_with_ask_my_mind.is_(True),
+            Thought.ai_processing_status == AIProcessingStatus.READY.value,
+            Thought.deleted_at.is_(None),
+        )
+    )
+    scores: dict[UUID, float] = {}
+    for thought_id, embedding in db.execute(statement):
+        score = _cosine_similarity(embedding, query_embedding)
+        scores[thought_id] = max(scores.get(thought_id, -1.0), score)
+    return scores
+
+
+def _hybrid_rank(
+    items: list[Thought],
+    query: str,
+    semantic_scores: dict[UUID, float],
+) -> list[Thought]:
+    def sort_key(thought: Thought) -> tuple[float, datetime, str]:
+        semantic_score = semantic_scores.get(thought.id)
+        lexical_score = _lexical_score(thought, query)
+        if semantic_score is None:
+            relevance = lexical_score
+        else:
+            relevance = 0.75 * max(0.0, semantic_score) + 0.25 * lexical_score
+        created_at = thought.created_at or datetime.min
+        return relevance, created_at, str(thought.id)
+
+    return sorted(items, key=sort_key, reverse=True)
+
+
+def list_thoughts(
+    db: Session,
+    user: User,
+    recall_query: RecallQuery,
+    *,
+    query_embedding: list[float] | None = None,
+) -> ThoughtListResult:
     if (
         recall_query.created_from is not None
         and recall_query.created_to is not None
@@ -114,7 +205,8 @@ def list_thoughts(db: Session, user: User, recall_query: RecallQuery) -> Thought
             detail="created_from must be before or equal to created_to",
         )
 
-    filters = _thought_filters(user, recall_query)
+    use_hybrid_search = bool(recall_query.query and recall_query.query.strip() and query_embedding)
+    filters = _thought_filters(user, recall_query, include_query=not use_hybrid_search)
     metadata_join = and_(
         ThoughtMetadata.thought_id == Thought.id,
         ThoughtMetadata.user_id == user.id,
@@ -128,15 +220,36 @@ def list_thoughts(db: Session, user: User, recall_query: RecallQuery) -> Thought
         )
         or 0
     )
-    items = list(
-        db.scalars(
-            select(Thought)
-            .options(selectinload(Thought.metadata_record))
-            .outerjoin(ThoughtMetadata, metadata_join)
-            .where(*filters)
-            .order_by(Thought.created_at.desc(), Thought.id.desc())
-            .offset((recall_query.page - 1) * recall_query.page_size)
-            .limit(recall_query.page_size)
-        )
+    statement = (
+        select(Thought)
+        .options(selectinload(Thought.metadata_record))
+        .outerjoin(ThoughtMetadata, metadata_join)
+        .where(*filters)
     )
+    if use_hybrid_search:
+        candidates = list(db.scalars(statement).unique())
+        semantic_scores = _semantic_scores(
+            db,
+            user,
+            query_embedding,
+            {thought.id for thought in candidates},
+        )
+        ranked = _hybrid_rank(candidates, recall_query.query or "", semantic_scores)
+        ranked = [
+            thought
+            for thought in ranked
+            if thought.id in semantic_scores
+            or _lexical_score(thought, recall_query.query or "") > 0
+        ]
+        total = len(ranked)
+        start = (recall_query.page - 1) * recall_query.page_size
+        items = ranked[start : start + recall_query.page_size]
+    else:
+        items = list(
+            db.scalars(
+                statement.order_by(Thought.created_at.desc(), Thought.id.desc())
+                .offset((recall_query.page - 1) * recall_query.page_size)
+                .limit(recall_query.page_size)
+            )
+        )
     return ThoughtListResult(items=items, total=total)

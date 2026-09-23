@@ -1,9 +1,11 @@
 from uuid import UUID
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import ThoughtMetadata
+from app.models import AIProcessingStatus, Thought, ThoughtChunk, ThoughtMetadata, User
+from app.services.thought_recall import RecallQuery, list_thoughts
 
 
 def create_thought(client: TestClient, **overrides: object) -> dict:
@@ -36,6 +38,58 @@ def test_recall_searches_text_and_returns_pagination_headers(client: TestClient)
     assert response.headers["X-Page-Size"] == "10"
     assert response.headers["X-Total-Pages"] == "1"
     assert "X-Total-Count" in response.headers["Access-Control-Expose-Headers"]
+
+
+def test_recall_hybrid_search_finds_semantically_related_thoughts(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    first = create_thought(
+        client,
+        title="Protect focused work",
+        body="Make room for deep concentration.",
+        use_with_ask_my_mind=True,
+    )
+    second = create_thought(
+        client,
+        title="Weekend plans",
+        body="Choose a restaurant for Saturday.",
+        use_with_ask_my_mind=True,
+    )
+    user = db_session.scalar(select(User).where(User.auth_user_id == "test-auth-user"))
+    assert user is not None
+    db_session.add_all(
+        [
+            ThoughtChunk(
+                user_id=user.id,
+                thought_id=UUID(first["id"]),
+                chunk_text="Make room for deep concentration.",
+                chunk_index=0,
+                embedding=[1.0, 0.0],
+            ),
+            ThoughtChunk(
+                user_id=user.id,
+                thought_id=UUID(second["id"]),
+                chunk_text="Choose a restaurant for Saturday.",
+                chunk_index=0,
+                embedding=[-1.0, 0.0],
+            ),
+        ]
+    )
+    for thought_id in (UUID(first["id"]), UUID(second["id"])):
+        thought = db_session.get(Thought, thought_id)
+        assert thought is not None
+        thought.ai_processing_status = AIProcessingStatus.READY.value
+    db_session.commit()
+
+    result = list_thoughts(
+        db_session,
+        user,
+        RecallQuery(query="sustained attention", page_size=10),
+        query_embedding=[1.0, 0.0],
+    )
+
+    assert [thought.id for thought in result.items][:1] == [UUID(first["id"])]
 
 
 def test_recall_composes_metadata_filters(client: TestClient) -> None:

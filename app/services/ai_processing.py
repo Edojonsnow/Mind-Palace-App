@@ -21,6 +21,7 @@ from app.services.ai_processing_content import (
     chunk_text,
     deterministic_metadata,
     normalize_extracted_metadata,
+    semantic_text,
 )
 from app.services.openai_ai import ExtractedThoughtMetadata, OpenAIProvider
 
@@ -134,13 +135,14 @@ def process_ai_job(
 
     try:
         provider = provider_factory()
+        enrichment_text = semantic_text(thought)
         chunks = chunk_text(
-            thought.body,
+            enrichment_text,
             settings.ai_chunk_size_chars,
             settings.ai_chunk_overlap_chars,
         )
         embeddings = provider.embed(chunks)
-        metadata = provider.extract_metadata(thought.body)
+        metadata = provider.extract_metadata(enrichment_text)
 
         db.refresh(thought)
         if thought.deleted_at is not None or not thought.use_with_ask_my_mind:

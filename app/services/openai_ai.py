@@ -11,34 +11,6 @@ class AIProviderError(RuntimeError):
     """Raised when the configured AI provider cannot process a thought."""
 
 
-TENTATIVE_EMOTIONS = (
-    "Joy",
-    "Excitement",
-    "Gratitude",
-    "Calm",
-    "Hope",
-    "Love",
-    "Curiosity",
-    "Confidence",
-    "Sadness",
-    "Anxiety",
-    "Fear",
-    "Anger",
-    "Frustration",
-    "Guilt",
-    "Shame",
-    "Loneliness",
-    "Disappointment",
-    "Confusion",
-    "Stress",
-    "Overwhelm",
-    "Pride",
-    "Relief",
-    "Nostalgia",
-    "Boredom",
-)
-
-
 class ExtractedThoughtMetadata(BaseModel):
     summary: str = Field(default="", description="A concise summary of the thought.")
     themes: list[str] = Field(default_factory=list, max_length=5)
@@ -107,9 +79,9 @@ class OpenAIProvider:
                             "supported by the thought. Do not force the thought into a fixed "
                             "taxonomy and do not reuse a generic category when a more precise "
                             "concept is supported. "
-                            "Return at most five emotions, choosing from this tentative vocabulary "
-                            "when appropriate: "
-                            f"{', '.join(TENTATIVE_EMOTIONS)}. "
+                            "Return at most five concise emotions or affective signals supported "
+                            "by the thought. Keep them open-ended rather than forcing a fixed "
+                            "vocabulary. "
                             "People and books are open-ended references and should include every "
                             "supported value."
                         ),

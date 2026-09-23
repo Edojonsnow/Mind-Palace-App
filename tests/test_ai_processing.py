@@ -16,6 +16,7 @@ from app.models import (
     ThoughtMetadata,
 )
 from app.services.ai_processing import normalize_extracted_metadata, process_ai_job
+from app.services.ai_processing_content import semantic_text
 from app.services.openai_ai import (
     ExtractedThoughtMetadata,
     GeneratedAskAnswer,
@@ -37,6 +38,27 @@ class FakeAIProvider:
 
 def no_op_enqueue(*args: object, **kwargs: object) -> None:
     return None
+
+
+def test_semantic_text_includes_capture_context() -> None:
+    thought = Thought(
+        title="A useful title",
+        body="The body of the thought.",
+        source_type="book",
+        source_title="A source",
+        source_author="An author",
+        book_title="A book",
+        book_author="A book author",
+        page_reference="42",
+        manual_tags=["focus", "reading"],
+    )
+
+    enriched = semantic_text(thought)
+
+    assert "Title: A useful title" in enriched
+    assert "Thought: The body of the thought." in enriched
+    assert "Book: A book" in enriched
+    assert "Tags: focus, reading" in enriched
 
 
 def test_openai_provider_adapts_embeddings_and_structured_metadata() -> None:
@@ -88,7 +110,7 @@ def test_extracted_metadata_keeps_open_ended_themes_and_normalizes_values() -> N
     )
 
     assert metadata.themes == ["career development", "Work"]
-    assert metadata.emotions == ["Joy"]
+    assert metadata.emotions == ["happy", "Joy"]
     assert metadata.people == ["Alex", "James Clear"]
     assert metadata.books == ["Deep Work", "Atomic Habits"]
 

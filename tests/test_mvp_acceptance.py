@@ -93,7 +93,7 @@ def test_mvp_workflow_covers_capture_organization_recall_ask_and_restore(
     )
     assert metadata is not None
     assert metadata.themes == ["career development"]
-    assert metadata.emotions == ["Joy"]
+    assert metadata.emotions == ["happy"]
 
     remember_response = client.get("/remember")
     assert remember_response.status_code == 200
