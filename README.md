@@ -48,6 +48,7 @@ Set these auth values in `.env`:
 NEON_AUTH_JWKS_URL=
 NEON_AUTH_ISSUER=
 NEON_AUTH_AUDIENCE=
+NEON_AUTH_BASE_URL=
 ```
 
 For Neon Auth, `NEON_AUTH_ISSUER` is the Auth host origin. Do not append the
@@ -59,6 +60,8 @@ NEON_AUTH_JWKS_URL=https://<auth-host>/neondb/auth/.well-known/jwks.json
 ```
 
 `NEON_AUTH_AUDIENCE` is optional. Keep it blank unless the Neon Auth token is issued with a specific audience claim.
+
+`NEON_AUTH_BASE_URL` is the Neon Auth API base URL (`https://<auth-host>/neondb/auth`). It is used to validate opaque session tokens when a JWT is not available. If omitted, the API derives it from `NEON_AUTH_JWKS_URL`.
 
 See [Database Environments](docs/DATABASE_ENVIRONMENTS.md) for development, staging, and production setup.
 

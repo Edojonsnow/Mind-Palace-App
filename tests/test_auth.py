@@ -6,7 +6,12 @@ from fastapi.testclient import TestClient
 from jwt.exceptions import InvalidTokenError, PyJWKClientError
 from sqlalchemy.orm import Session
 
-from app.core.auth import verify_access_token
+from app.core.auth import (
+    AuthenticatedUser,
+    get_current_user,
+    verify_access_token,
+    verify_session_token,
+)
 from app.db.session import get_db
 from app.main import create_app
 
@@ -163,3 +168,96 @@ def test_verify_access_token_maps_decode_errors_to_unauthorized(
 
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Invalid authentication token"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_accepts_opaque_neon_session_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_verify_session_token(
+        token: str,
+        app_settings: object = object(),
+    ) -> AuthenticatedUser:
+        assert token == "opaque-session-token"
+        return AuthenticatedUser(auth_user_id="neon-user-123", email="alex@example.com")
+
+    monkeypatch.setattr("app.core.auth.verify_session_token", fake_verify_session_token)
+
+    user = await get_current_user(
+        SimpleNamespace(credentials="opaque-session-token"),
+    )
+
+    assert user.auth_user_id == "neon-user-123"
+    assert user.email == "alex@example.com"
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_accepts_signed_session_cookie_from_web_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_verify_session_token(
+        token: str,
+        app_settings: object = object(),
+        *,
+        signed_cookie: bool = False,
+    ) -> AuthenticatedUser:
+        assert token == "session-token.signature"
+        assert signed_cookie is True
+        return AuthenticatedUser(auth_user_id="neon-user-123")
+
+    monkeypatch.setattr("app.core.auth.verify_session_token", fake_verify_session_token)
+
+    user = await get_current_user(
+        SimpleNamespace(credentials=None),
+        "session-token.signature",
+    )
+
+    assert user.auth_user_id == "neon-user-123"
+
+
+@pytest.mark.asyncio
+async def test_verify_session_token_returns_user_from_neon_session_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, object]:
+            return {
+                "session": {"userId": "neon-user-123"},
+                "user": {"id": "neon-user-123", "email": "alex@example.com"},
+            }
+
+    class FakeAsyncClient:
+        def __init__(self, *, timeout: float) -> None:
+            assert timeout == 3.0
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+        async def get(self, url: str, *, headers: dict[str, str]) -> FakeResponse:
+            assert url == "https://auth.example.com/neondb/auth/get-session"
+            assert headers == {
+                "Authorization": "Bearer opaque-session-token",
+                "Origin": "http://localhost:3000",
+                "x-neon-auth-middleware": "true",
+            }
+            return FakeResponse()
+
+    monkeypatch.setattr("app.core.auth.httpx.AsyncClient", FakeAsyncClient)
+
+    user = await verify_session_token(
+        "opaque-session-token",
+            SimpleNamespace(
+                neon_auth_base_url=None,
+                neon_auth_jwks_url="https://auth.example.com/neondb/auth/.well-known/jwks.json",
+                neon_auth_issuer="https://auth.example.com",
+                backend_cors_origins="http://localhost:3000",
+                cors_origins=["http://localhost:3000"],
+            ),
+    )
+
+    assert user == AuthenticatedUser(auth_user_id="neon-user-123", email="alex@example.com")

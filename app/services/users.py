@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.auth import AuthenticatedUser
@@ -15,7 +16,16 @@ def get_or_create_user(db: Session, authenticated_user: AuthenticatedUser) -> Us
         email=authenticated_user.email,
     )
     db.add(user)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        existing_user = db.scalar(
+            select(User).where(User.auth_user_id == authenticated_user.auth_user_id)
+        )
+        if existing_user is None:
+            raise
+        return existing_user
 
     db.add(UserSettings(user_id=user.id))
     db.flush()

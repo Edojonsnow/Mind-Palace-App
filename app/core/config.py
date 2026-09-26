@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     neon_auth_jwks_url: str | None = None
     neon_auth_issuer: str | None = None
     neon_auth_audience: str | None = None
+    neon_auth_base_url: str | None = None
     backend_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     openai_api_key: str | None = None
     openai_embedding_model: str = "text-embedding-3-small"
