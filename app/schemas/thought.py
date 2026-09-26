@@ -52,6 +52,10 @@ class ThoughtMetadataRead(BaseModel):
     key_questions: list[str]
     action_items: list[str]
     deterministic_metadata: dict[str, Any]
+    enrichment_schema_version: int | None
+    metadata_model: str | None
+    source_hash: str | None
+    processed_at: datetime | None
     created_at: datetime
     updated_at: datetime
 

@@ -100,6 +100,10 @@ def build_export_payload(db: Session, user: User) -> dict[str, object]:
                 "books": record.books,
                 "key_questions": record.key_questions,
                 "action_items": record.action_items,
+                "enrichment_schema_version": record.enrichment_schema_version,
+                "metadata_model": record.metadata_model,
+                "source_hash": record.source_hash,
+                "processed_at": _iso(record.processed_at),
                 "created_at": _iso(record.created_at),
                 "updated_at": _iso(record.updated_at),
             }

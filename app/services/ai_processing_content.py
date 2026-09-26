@@ -1,5 +1,9 @@
+import hashlib
+
 from app.models import Thought
 from app.services.openai_ai import ExtractedThoughtMetadata
+
+AI_ENRICHMENT_SCHEMA_VERSION = 1
 
 
 def _normalize_values(
@@ -96,6 +100,11 @@ def semantic_text(thought: Thought) -> str:
     add_section("Page", thought.page_reference)
     add_section("Tags", thought.manual_tags)
     return "\n".join(sections)
+
+
+def enrichment_source_hash(thought: Thought) -> str:
+    """Identify the exact thought content represented by derived AI artifacts."""
+    return hashlib.sha256(semantic_text(thought).encode("utf-8")).hexdigest()
 
 
 def deterministic_metadata(thought: Thought) -> dict[str, object]:

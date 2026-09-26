@@ -51,6 +51,9 @@ class ThoughtChunk(Base):
     chunk_text: Mapped[str] = mapped_column(Text)
     chunk_index: Mapped[int] = mapped_column(Integer)
     embedding: Mapped[list[float]] = mapped_column(EmbeddingVector())
+    enrichment_schema_version: Mapped[int | None] = mapped_column(Integer)
+    embedding_model: Mapped[str | None] = mapped_column(String(128))
+    source_hash: Mapped[str | None] = mapped_column(String(64))
     token_count: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -76,6 +79,10 @@ class ThoughtMetadata(Base):
     key_questions: Mapped[list[str]] = mapped_column(JSON, default=list)
     action_items: Mapped[list[str]] = mapped_column(JSON, default=list)
     deterministic_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    enrichment_schema_version: Mapped[int | None] = mapped_column(Integer)
+    metadata_model: Mapped[str | None] = mapped_column(String(128))
+    source_hash: Mapped[str | None] = mapped_column(String(64))
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -99,6 +106,10 @@ class BackgroundJob(Base):
     status: Mapped[str] = mapped_column(String(32), default=BackgroundJobStatus.PENDING.value)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[str | None] = mapped_column(String(255))
+    enrichment_schema_version: Mapped[int | None] = mapped_column(Integer)
+    embedding_model: Mapped[str | None] = mapped_column(String(128))
+    metadata_model: Mapped[str | None] = mapped_column(String(128))
+    source_hash: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

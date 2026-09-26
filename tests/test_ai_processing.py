@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import Settings
+from app.core.config import Settings, settings
 from app.models import (
     AIProcessingStatus,
     BackgroundJob,
@@ -15,8 +15,12 @@ from app.models import (
     ThoughtChunk,
     ThoughtMetadata,
 )
-from app.services.ai_processing import normalize_extracted_metadata, process_ai_job
-from app.services.ai_processing_content import semantic_text
+from app.services.ai_processing import (
+    normalize_extracted_metadata,
+    process_ai_job,
+    schedule_ai_processing,
+)
+from app.services.ai_processing_content import AI_ENRICHMENT_SCHEMA_VERSION, semantic_text
 from app.services.openai_ai import (
     ExtractedThoughtMetadata,
     GeneratedAskAnswer,
@@ -219,6 +223,119 @@ def test_worker_creates_chunks_embeddings_and_metadata(
     assert metadata is not None
     assert metadata.summary == "A focused test thought."
     assert metadata.themes == ["testing"]
+    assert metadata.enrichment_schema_version == AI_ENRICHMENT_SCHEMA_VERSION
+    assert metadata.metadata_model == settings.openai_metadata_model
+    assert metadata.source_hash is not None
+    assert metadata.processed_at is not None
+    assert chunks[0].enrichment_schema_version == AI_ENRICHMENT_SCHEMA_VERSION
+    assert chunks[0].embedding_model == settings.openai_embedding_model
+    assert chunks[0].source_hash == metadata.source_hash
+    assert job.enrichment_schema_version == AI_ENRICHMENT_SCHEMA_VERSION
+    assert job.embedding_model == settings.openai_embedding_model
+    assert job.metadata_model == settings.openai_metadata_model
+    assert job.source_hash == metadata.source_hash
+
+
+def test_completed_ai_job_is_idempotent(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", no_op_enqueue)
+    response = client.post(
+        "/thoughts",
+        json={"body": "Run this enrichment once.", "use_with_ask_my_mind": True},
+    )
+    thought_id = UUID(response.json()["id"])
+    job = db_session.scalar(select(BackgroundJob))
+    assert job is not None
+
+    calls = {"embed": 0, "metadata": 0}
+
+    class CountingProvider(FakeAIProvider):
+        def embed(self, texts: list[str]) -> list[list[float]]:
+            calls["embed"] += 1
+            return super().embed(texts)
+
+        def extract_metadata(self, thought_body: str) -> ExtractedThoughtMetadata:
+            calls["metadata"] += 1
+            return super().extract_metadata(thought_body)
+
+    process_ai_job(
+        db_session,
+        job.id,
+        thought_id,
+        provider_factory=lambda: CountingProvider(),
+    )
+    process_ai_job(
+        db_session,
+        job.id,
+        thought_id,
+        provider_factory=lambda: CountingProvider(),
+    )
+
+    db_session.expire_all()
+    assert calls == {"embed": 1, "metadata": 1}
+    assert len(db_session.scalars(select(ThoughtChunk)).all()) == 1
+    assert len(db_session.scalars(select(ThoughtMetadata)).all()) == 1
+    assert db_session.scalar(select(BackgroundJob)).attempt_count == 1
+
+
+def test_scheduling_reuses_an_active_enrichment_job(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", no_op_enqueue)
+    response = client.post(
+        "/thoughts",
+        json={"body": "Do not duplicate pending work.", "use_with_ask_my_mind": True},
+    )
+    thought_id = UUID(response.json()["id"])
+    thought = db_session.get(Thought, thought_id)
+    assert thought is not None
+    first_job = db_session.scalar(select(BackgroundJob))
+    assert first_job is not None
+
+    second_job = schedule_ai_processing(db_session, thought)
+
+    assert second_job.id == first_job.id
+    assert len(db_session.scalars(select(BackgroundJob)).all()) == 1
+
+
+def test_worker_discards_results_for_changed_source_content(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", no_op_enqueue)
+    response = client.post(
+        "/thoughts",
+        json={"body": "The source before processing.", "use_with_ask_my_mind": True},
+    )
+    thought_id = UUID(response.json()["id"])
+    job = db_session.scalar(select(BackgroundJob))
+    assert job is not None
+
+    class StaleResultProvider(FakeAIProvider):
+        def embed(self, texts: list[str]) -> list[list[float]]:
+            thought = db_session.get(Thought, thought_id)
+            assert thought is not None
+            thought.body = "The source changed while processing."
+            db_session.commit()
+            return super().embed(texts)
+
+    process_ai_job(
+        db_session,
+        job.id,
+        thought_id,
+        provider_factory=lambda: StaleResultProvider(),
+    )
+
+    db_session.expire_all()
+    assert db_session.scalar(select(BackgroundJob)).status == BackgroundJobStatus.CANCELLED.value
+    assert db_session.scalars(select(ThoughtChunk)).all() == []
+    assert db_session.scalars(select(ThoughtMetadata)).all() == []
 
 
 def test_editing_organization_fields_purges_stale_artifacts_and_reschedules(

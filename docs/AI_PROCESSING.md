@@ -120,6 +120,21 @@ The worker checks the thought's current AI setting before and after the OpenAI
 calls. That prevents a completed job from storing new artifacts after the user
 has disabled AI while the job was running.
 
+## Provenance And Safe Reprocessing
+
+Every enrichment job records the schema version, embedding model, metadata
+model, and SHA-256 hash of the semantic input it was scheduled to process.
+Chunks and metadata copy that provenance and record when processing completed.
+The hash lets the worker detect a thought that changed while an OpenAI request
+was in flight, so an older result is discarded instead of being attached to
+newer content.
+
+Scheduling is idempotent for active work: a second request for the same thought
+reuses its pending or running job. A completed job is also safe to deliver more
+than once; the worker exits without calling OpenAI again. The existing
+`POST /thoughts/{thought_id}/organize` route remains the explicit way to rebuild
+derived artifacts after a failure or a model/schema change.
+
 ## Interview Explanation
 
 > I implemented an opt-in asynchronous enrichment pipeline. The API persists

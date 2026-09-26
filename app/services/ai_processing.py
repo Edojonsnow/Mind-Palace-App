@@ -3,7 +3,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import delete, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -18,8 +18,10 @@ from app.models import (
     ThoughtMetadata,
 )
 from app.services.ai_processing_content import (
+    AI_ENRICHMENT_SCHEMA_VERSION,
     chunk_text,
     deterministic_metadata,
+    enrichment_source_hash,
     normalize_extracted_metadata,
     semantic_text,
 )
@@ -43,12 +45,30 @@ def _set_job_failed(db: Session, job_id: UUID, thought_id: UUID, error: Exceptio
 
 
 def schedule_ai_processing(db: Session, thought: Thought) -> BackgroundJob:
+    active_job = db.scalar(
+        select(BackgroundJob)
+        .where(
+            BackgroundJob.thought_id == thought.id,
+            BackgroundJob.job_type == BackgroundJobType.CHUNK_THOUGHT.value,
+            BackgroundJob.status.in_(
+                [BackgroundJobStatus.PENDING.value, BackgroundJobStatus.RUNNING.value]
+            ),
+        )
+        .order_by(BackgroundJob.created_at.desc())
+    )
+    if active_job is not None:
+        return active_job
+
     job = BackgroundJob(
         user_id=thought.user_id,
         thought_id=thought.id,
         job_type=BackgroundJobType.CHUNK_THOUGHT.value,
         status=BackgroundJobStatus.PENDING.value,
         attempt_count=0,
+        enrichment_schema_version=AI_ENRICHMENT_SCHEMA_VERSION,
+        embedding_model=settings.openai_embedding_model,
+        metadata_model=settings.openai_metadata_model,
+        source_hash=enrichment_source_hash(thought),
     )
     thought.ai_processing_status = AIProcessingStatus.PENDING.value
     db.add(job)
@@ -90,6 +110,11 @@ def _store_metadata(
     db: Session,
     thought: Thought,
     metadata: ExtractedThoughtMetadata,
+    *,
+    enrichment_schema_version: int,
+    metadata_model: str,
+    source_hash: str,
+    processed_at: datetime,
 ) -> None:
     metadata = normalize_extracted_metadata(metadata)
     db.add(
@@ -105,6 +130,10 @@ def _store_metadata(
             key_questions=metadata.key_questions,
             action_items=metadata.action_items,
             deterministic_metadata=deterministic_metadata(thought),
+            enrichment_schema_version=enrichment_schema_version,
+            metadata_model=metadata_model,
+            source_hash=source_hash,
+            processed_at=processed_at,
         )
     )
 
@@ -115,10 +144,30 @@ def process_ai_job(
     thought_id: UUID,
     provider_factory: Callable[[], OpenAIProvider] = OpenAIProvider,
 ) -> None:
-    job = db.get(BackgroundJob, job_id)
+    job = db.scalar(
+        select(BackgroundJob)
+        .where(BackgroundJob.id == job_id)
+        .with_for_update()
+    )
     thought = db.get(Thought, thought_id)
     if job is None or thought is None:
         return
+
+    if job.status in {BackgroundJobStatus.COMPLETED.value, BackgroundJobStatus.CANCELLED.value}:
+        return
+
+    source_hash = job.source_hash or enrichment_source_hash(thought)
+    if job.enrichment_schema_version is None:
+        job.enrichment_schema_version = AI_ENRICHMENT_SCHEMA_VERSION
+    if job.embedding_model is None:
+        job.embedding_model = settings.openai_embedding_model
+    if job.metadata_model is None:
+        job.metadata_model = settings.openai_metadata_model
+    if job.source_hash is None:
+        job.source_hash = source_hash
+    assert job.enrichment_schema_version is not None
+    assert job.embedding_model is not None
+    assert job.metadata_model is not None
 
     if thought.deleted_at is not None or not thought.use_with_ask_my_mind:
         job.status = BackgroundJobStatus.CANCELLED.value
@@ -145,13 +194,21 @@ def process_ai_job(
         metadata = provider.extract_metadata(enrichment_text)
 
         db.refresh(thought)
-        if thought.deleted_at is not None or not thought.use_with_ask_my_mind:
-            job.status = BackgroundJobStatus.CANCELLED.value
-            job.completed_at = datetime.now(UTC)
-            purge_ai_artifacts(db, thought, commit=False)
+        db.refresh(job)
+        current_source_hash = enrichment_source_hash(thought)
+        if (
+            job.status != BackgroundJobStatus.RUNNING.value
+            or thought.deleted_at is not None
+            or not thought.use_with_ask_my_mind
+            or current_source_hash != source_hash
+        ):
+            if job.status == BackgroundJobStatus.RUNNING.value:
+                job.status = BackgroundJobStatus.CANCELLED.value
+                job.completed_at = datetime.now(UTC)
             db.commit()
             return
 
+        processed_at = datetime.now(UTC)
         db.execute(delete(ThoughtChunk).where(ThoughtChunk.thought_id == thought.id))
         db.execute(delete(ThoughtMetadata).where(ThoughtMetadata.thought_id == thought.id))
         for index, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=True)):
@@ -162,12 +219,23 @@ def process_ai_job(
                     chunk_text=chunk,
                     chunk_index=index,
                     embedding=embedding,
+                    enrichment_schema_version=job.enrichment_schema_version,
+                    embedding_model=job.embedding_model,
+                    source_hash=source_hash,
                 )
             )
-        _store_metadata(db, thought, metadata)
+        _store_metadata(
+            db,
+            thought,
+            metadata,
+            enrichment_schema_version=job.enrichment_schema_version,
+            metadata_model=job.metadata_model,
+            source_hash=source_hash,
+            processed_at=processed_at,
+        )
         thought.ai_processing_status = AIProcessingStatus.READY.value
         job.status = BackgroundJobStatus.COMPLETED.value
-        job.completed_at = datetime.now(UTC)
+        job.completed_at = processed_at
         db.commit()
     except Exception as error:
         db.rollback()
