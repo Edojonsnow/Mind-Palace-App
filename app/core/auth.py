@@ -110,15 +110,7 @@ async def verify_session_token(
             response = await client.get(
                 f"{base_url.rstrip('/')}/get-session",
                 headers={
-                    (
-                        "Cookie"
-                        if signed_cookie or token.count(".") == 1
-                        else "Authorization"
-                    ): (
-                        f"{NEON_AUTH_SESSION_COOKIE}={unquote(token)}"
-                        if signed_cookie or token.count(".") == 1
-                        else f"Bearer {token}"
-                    ),
+                    "Cookie": f"{NEON_AUTH_SESSION_COOKIE}={unquote(token)}",
                     "Origin": app_settings.cors_origins[0]
                     if app_settings.cors_origins
                     else "http://localhost:3000",

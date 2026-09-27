@@ -241,7 +241,7 @@ async def test_verify_session_token_returns_user_from_neon_session_response(
         async def get(self, url: str, *, headers: dict[str, str]) -> FakeResponse:
             assert url == "https://auth.example.com/neondb/auth/get-session"
             assert headers == {
-                "Authorization": "Bearer opaque-session-token",
+                "Cookie": "__Secure-neon-auth.session_token=opaque-session-token",
                 "Origin": "http://localhost:3000",
                 "x-neon-auth-middleware": "true",
             }
