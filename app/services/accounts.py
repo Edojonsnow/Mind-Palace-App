@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.models import (
     AccountDeletionRequest,
     AccountDeletionStatus,
+    AIPreferences,
     BackgroundJob,
     Book,
     ChatConversation,
@@ -98,6 +99,7 @@ def cancel_account_deletion(db: Session, user: User) -> None:
 
 
 def purge_user_data(db: Session, user: User) -> None:
+    db.execute(delete(AIPreferences).where(AIPreferences.user_id == user.id))
     db.execute(delete(ThoughtChunk).where(ThoughtChunk.user_id == user.id))
     db.execute(delete(ThoughtMetadata).where(ThoughtMetadata.user_id == user.id))
     db.execute(delete(ChatMessage).where(ChatMessage.user_id == user.id))

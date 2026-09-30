@@ -18,6 +18,7 @@ from app.services.openai_ai import (
     GeneratedAskAnswer,
     OpenAIProvider,
 )
+from app.services.profile import allowed_profile_context
 from app.services.settings import get_user_settings
 
 logger = logging.getLogger(__name__)
@@ -136,10 +137,12 @@ def ask_my_mind(
         if not retrieved_chunks:
             generated = GeneratedAskAnswer(answer=no_source_answer())
         else:
+            profile_context = allowed_profile_context(db, user)
             generated = provider.answer_question(
                 question,
                 build_context(retrieved_chunks),
                 history,
+                **({"profile_context": profile_context} if profile_context is not None else {}),
             )
     except Exception as error:
         db.rollback()

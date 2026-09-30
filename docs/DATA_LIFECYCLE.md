@@ -21,7 +21,8 @@ pending thought jobs, and citations to the thought from stored chat messages.
 ## Exports
 
 `POST /exports` creates a pending export request and a background job. The job
-stores a JSON snapshot containing user settings, thoughts, AI metadata, chat
+stores a version-2 JSON snapshot containing profile fields, AI preferences,
+user settings, thoughts, AI metadata, chat
 conversations, and chat messages. It does not include embeddings or internal
 job records.
 
@@ -36,7 +37,7 @@ cleans it up.
 `POST /account/deletion` schedules deletion of all Mind Palace data after the
 same recovery window. `DELETE /account/deletion` cancels a pending request.
 When the delayed job runs, it removes thoughts, AI artifacts, chats, exports,
-settings, and the local Mind Palace user record.
+settings, AI preferences, profile fields, and the local Mind Palace user record.
 
 The current API does not call a Neon Auth administrative endpoint. Therefore,
 the Neon Auth identity is outside this data purge and must be removed through a

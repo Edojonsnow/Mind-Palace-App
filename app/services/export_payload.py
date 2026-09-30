@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
+    AIPreferences,
     ChatConversation,
     ChatMessage,
     Thought,
@@ -43,6 +44,7 @@ def _thought_payload(thought: Thought) -> dict[str, object]:
 
 
 def build_export_payload(db: Session, user: User) -> dict[str, object]:
+    ai_preferences = db.get(AIPreferences, user.id)
     settings_record = db.scalar(
         select(UserSettings).where(UserSettings.user_id == user.id)
     )
@@ -72,12 +74,20 @@ def build_export_payload(db: Session, user: User) -> dict[str, object]:
     )
 
     return {
-        "format_version": 1,
+        "format_version": 2,
         "exported_at": datetime.now(UTC).isoformat(),
         "user": {
             "email": user.email,
             "display_name": user.display_name,
+            "avatar_url": user.avatar_url,
             "created_at": _iso(user.created_at),
+        },
+        "ai_preferences": {
+            "use_profile_context": ai_preferences.use_profile_context if ai_preferences else False,
+            "writing_style": ai_preferences.writing_style if ai_preferences else "natural",
+            "response_detail": ai_preferences.response_detail if ai_preferences else "balanced",
+            "personal_goals": ai_preferences.personal_goals if ai_preferences else [],
+            "interests": ai_preferences.interests if ai_preferences else [],
         },
         "settings": (
             {

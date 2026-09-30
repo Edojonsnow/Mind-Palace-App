@@ -7,6 +7,7 @@ from app.models.ai import (
     ThoughtChunk,
     ThoughtMetadata,
 )
+from app.models.ai_preferences import AIPreferences
 from app.models.book import Book
 from app.models.chat import ChatConversation, ChatMessage, ChatMessageRole
 from app.models.lifecycle import (
@@ -20,6 +21,7 @@ from app.models.user import User
 from app.models.user_settings import UserSettings
 
 __all__ = [
+    "AIPreferences",
     "SourceType",
     "StorageScope",
     "AIProcessingStatus",
