@@ -35,6 +35,11 @@ The API does not wait for OpenAI before returning the saved thought. This keeps
 capture fast and isolates AI latency or provider failures from the core note-
 taking path.
 
+Before claiming processing, the worker checks a per-user AI job allowance.
+Limited work remains pending with a `not_before` timestamp and is rescheduled
+through RQ. Saving the original thought is not blocked. See
+[Request Safety](REQUEST_SAFETY.md) for limits and failure behavior.
+
 ## Why Chunking Exists
 
 An embedding represents a piece of text as a vector of numbers. Similar meaning

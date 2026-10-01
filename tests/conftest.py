@@ -9,11 +9,18 @@ from sqlalchemy.pool import StaticPool
 
 from app import models  # noqa: F401
 from app.core.auth import AuthenticatedUser, get_current_user
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
 
 OTHER_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
+
+
+@pytest.fixture(autouse=True)
+def disable_external_rate_limits(monkeypatch):
+    # Unit tests run without Redis; admission tests explicitly enable/stub the shared limiter.
+    monkeypatch.setattr(settings, "rate_limits_enabled", False)
 
 
 @pytest.fixture

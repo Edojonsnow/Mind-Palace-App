@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.rate_limit import enforce_rate_limit
 from app.models import ChatConversation, ChatMessage, ChatMessageRole, IdempotencyRequest, User
 from app.schemas.ask import AskResponse, ChatConversationRead, ChatMessageRead
 from app.services.ask_retrieval import (
@@ -88,6 +89,7 @@ def ask_my_mind(
     provider_factory: Callable[[], OpenAIProvider] | None = None,
     operation: IdempotencyRequest | None = None,
 ) -> AskResponse:
+    enforce_rate_limit(user.id, "ask")
     user_settings = get_user_settings(db, user)
     should_store_history = user_settings.store_chat_history
     conversation: ChatConversation | None = None

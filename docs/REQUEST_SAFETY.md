@@ -41,8 +41,51 @@ concurrent redelivery from repeating the provider call; a crashed running job
 must be inspected/retried through the organization action rather than silently
 executed again.
 
+## Rate Limiting
+
+Redis atomically admits expensive work per authenticated user across API and
+worker instances. Each bucket has a fixed window starting at its first admitted
+request; rejected requests do not extend it. Defaults are configurable:
+
+| Work | Default | Environment variable |
+| --- | --- | --- |
+| Ask | 10/minute | `RATE_LIMIT_ASK_PER_MINUTE` |
+| Query embeddings | 60/minute | `RATE_LIMIT_SEARCH_PER_MINUTE` |
+| Organization retries | 10/minute | `RATE_LIMIT_ORGANIZE_PER_MINUTE` |
+| Export requests | 3/hour | `RATE_LIMIT_EXPORTS_PER_HOUR` |
+| Worker AI jobs | 20/minute | `RATE_LIMIT_AI_JOBS_PER_MINUTE` |
+
+`RATE_LIMITS_ENABLED=false` disables admission checks. Bucket keys contain only
+the work type and user ID, never queries, thought bodies, or IP addresses.
+
+Ask, export, and organization admission is checked before side effects. A
+denial returns 429 with `Retry-After`; Redis admission outages return 503 with
+`Retry-After: 30`. These safe, pre-work rejections release the idempotency claim,
+so an explicit retry with the same key can proceed later. Completed idempotent
+replays do not consume another allowance. Failed downstream work still consumes
+an admission; the limiter is not a billing ledger.
+
+Recall falls back to lexical search rather than making another embedding call
+when its allowance is exhausted or Redis is unavailable. It returns 200 with
+`X-Search-Fallback` and `Retry-After`; the web displays a text-search notice.
+Browsing without a query does not consume the semantic-search allowance.
+
+Thought capture, editing, and AI opt-out remain available independently of AI
+allowances. Workers defer limited jobs through RQ's scheduler, storing
+`background_jobs.not_before` and keeping the thought pending. Deferred jobs
+recheck ownership, deletion, content version, and AI permission before a model
+call. A queue dispatch failure marks processing failed without losing the
+thought. The existing Postgres-to-Redis dispatch crash gap still requires
+operational recovery; this is not a transactional outbox.
+
+These are per-user work limits, not token budgets, daily spending quotas,
+global capacity controls, or login/signup abuse protection. Those protections
+must be configured separately before a public rollout.
+
 ## Verification
 
 Backend tests cover replay, payload conflicts, user isolation, resource
 deletion, citation permissions, history-off behavior, exports, worker enqueue
-deduplication, expiration, admission rejection, and concurrent claims.
+deduplication, expiration, admission rejection, and concurrent claims. Admission
+tests cover Retry-After, Redis outages, lexical fallback, job deferral/resumption,
+and AI opt-out. Browser fixtures cover retries and user-facing fallback feedback.

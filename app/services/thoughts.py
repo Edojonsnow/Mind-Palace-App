@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
+from app.core.rate_limit import enforce_rate_limit
 from app.models import (
     StorageScope,
     Thought,
@@ -207,6 +208,7 @@ def retry_ai_processing(
             detail="Enable Use with Ask My Mind before retrying organization",
         )
 
+    enforce_rate_limit(user.id, "organize")
     complete_operation(operation, "thought", thought.id)
     purge_ai_artifacts(db, thought, commit=False)
     schedule_ai_processing(db, thought)

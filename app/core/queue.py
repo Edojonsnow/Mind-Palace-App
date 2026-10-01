@@ -31,6 +31,15 @@ def enqueue_ai_processing(job_id: UUID, thought_id: UUID) -> None:
     )
 
 
+def enqueue_deferred_ai_processing(job_id: UUID, thought_id: UUID, run_at: datetime) -> None:
+    from app.workers.tasks import process_thought
+
+    get_ai_queue().enqueue_at(
+        run_at, process_thought, str(job_id), str(thought_id),
+        job_id=f"deferred-ai-{job_id}-{int(run_at.timestamp())}", result_ttl=0,
+    )
+
+
 def enqueue_thought_purge(job_id: UUID, thought_id: UUID, run_at: datetime | None) -> None:
     from app.workers.tasks import purge_deleted_thought
 

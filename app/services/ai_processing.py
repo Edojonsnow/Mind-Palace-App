@@ -1,13 +1,15 @@
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.queue import enqueue_ai_processing
+from app.core.queue import enqueue_ai_processing, enqueue_deferred_ai_processing
+from app.core.rate_limit import enforce_rate_limit
+from app.core.request_errors import RequestNotStartedError
 from app.models import (
     AIProcessingStatus,
     BackgroundJob,
@@ -25,6 +27,7 @@ from app.services.ai_processing_content import (
     normalize_extracted_metadata,
     semantic_text,
 )
+from app.services.data_lifecycle import as_utc
 from app.services.openai_ai import ExtractedThoughtMetadata, OpenAIProvider
 
 logger = logging.getLogger(__name__)
@@ -153,6 +156,9 @@ def process_ai_job(
     if job is None or thought is None:
         return
 
+    if job.user_id != thought.user_id or job.thought_id != thought.id:
+        return
+
     if job.status in {
         BackgroundJobStatus.COMPLETED.value, BackgroundJobStatus.CANCELLED.value,
         BackgroundJobStatus.RUNNING.value,
@@ -179,6 +185,30 @@ def process_ai_job(
         db.commit()
         return
 
+    if enrichment_source_hash(thought) != source_hash:
+        job.status = BackgroundJobStatus.CANCELLED.value
+        job.completed_at = datetime.now(UTC)
+        db.commit()
+        return
+
+    if job.not_before is not None and as_utc(job.not_before) > datetime.now(UTC):
+        return
+
+    try:
+        enforce_rate_limit(thought.user_id, "ai_processing")
+    except RequestNotStartedError as error:
+        delay = max(1, int(error.headers["Retry-After"]))
+        job.not_before = datetime.now(UTC) + timedelta(seconds=delay)
+        job.status = BackgroundJobStatus.PENDING.value
+        thought.ai_processing_status = AIProcessingStatus.PENDING.value
+        db.commit()
+        try:
+            enqueue_deferred_ai_processing(job.id, thought.id, job.not_before)
+        except Exception as queue_error:
+            _set_job_failed(db, job.id, thought.id, queue_error)
+        return
+
+    job.not_before = None
     job.status = BackgroundJobStatus.RUNNING.value
     job.attempt_count += 1
     job.started_at = datetime.now(UTC)

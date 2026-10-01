@@ -7,6 +7,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.rate_limit import enforce_rate_limit
 from app.models import (
     BackgroundJob,
     BackgroundJobStatus,
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 def create_export_request(
     db: Session, user: User, *, operation: IdempotencyRequest | None = None,
 ) -> ExportRequest:
+    enforce_rate_limit(user.id, "export")
     now = utc_now()
     db.execute(
         delete(ExportRequest).where(

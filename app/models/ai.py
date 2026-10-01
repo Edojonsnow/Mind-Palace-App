@@ -115,4 +115,5 @@ class BackgroundJob(Base):
         server_default=func.now(),
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    not_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

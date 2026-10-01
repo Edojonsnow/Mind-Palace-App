@@ -7,6 +7,8 @@ from fastapi import APIRouter, Query, Response, status
 
 from app.api.dependencies import CurrentUser, DbSession, IdempotencyKey
 from app.core.config import settings
+from app.core.rate_limit import enforce_rate_limit
+from app.core.request_errors import RequestNotStartedError
 from app.models import SourceType, ThoughtType
 from app.schemas import ThoughtCreate, ThoughtRead, ThoughtUpdate
 from app.services.data_lifecycle import list_deleted_thoughts, restore_thought
@@ -81,7 +83,13 @@ def list_thoughts_route(
     query_embedding = None
     if q and q.strip() and settings.openai_api_key:
         try:
+            enforce_rate_limit(user.id, "semantic_search")
             query_embedding = OpenAIProvider().embed([q.strip()])[0]
+        except RequestNotStartedError as error:
+            response.headers["X-Search-Fallback"] = (
+                "rate-limit" if error.status_code == 429 else "unavailable"
+            )
+            response.headers["Retry-After"] = error.headers["Retry-After"]
         except Exception as error:
             logger.warning(
                 "Recall semantic search unavailable: error_type=%s",

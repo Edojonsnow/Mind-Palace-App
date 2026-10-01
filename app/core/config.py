@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.database_url import normalize_database_url
@@ -34,6 +35,12 @@ class Settings(BaseSettings):
     recovery_window_days: int = 30
     export_retention_hours: int = 24
     idempotency_retention_hours: int = 24
+    rate_limits_enabled: bool = True
+    rate_limit_ask_per_minute: int = Field(default=10, ge=1)
+    rate_limit_search_per_minute: int = Field(default=60, ge=1)
+    rate_limit_organize_per_minute: int = Field(default=10, ge=1)
+    rate_limit_exports_per_hour: int = Field(default=3, ge=1)
+    rate_limit_ai_jobs_per_minute: int = Field(default=20, ge=1)
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

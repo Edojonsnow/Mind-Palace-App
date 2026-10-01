@@ -24,6 +24,7 @@ def create_app() -> FastAPI:
             "X-Total-Pages",
             "Idempotency-Replayed",
             "Retry-After",
+            "X-Search-Fallback",
         ],
     )
     app.include_router(health.router)
