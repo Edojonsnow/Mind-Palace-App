@@ -7,13 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import ChatConversation, ChatMessage, ChatMessageRole, User
+from app.models import ChatConversation, ChatMessage, ChatMessageRole, IdempotencyRequest, User
 from app.schemas.ask import AskResponse, ChatConversationRead, ChatMessageRead
 from app.services.ask_retrieval import (
     has_retrievable_chunks,
     retrieve_relevant_chunks,
 )
 from app.services.ask_sources import build_context, build_sources, no_source_answer
+from app.services.idempotency import complete_operation
 from app.services.openai_ai import (
     GeneratedAskAnswer,
     OpenAIProvider,
@@ -85,6 +86,7 @@ def ask_my_mind(
     conversation_id: UUID | None = None,
     *,
     provider_factory: Callable[[], OpenAIProvider] | None = None,
+    operation: IdempotencyRequest | None = None,
 ) -> AskResponse:
     user_settings = get_user_settings(db, user)
     should_store_history = user_settings.store_chat_history
@@ -116,6 +118,7 @@ def ask_my_mind(
                 ChatMessageRole.ASSISTANT,
                 answer,
             )
+            complete_operation(operation, "ask", assistant_message.id)
             db.commit()
             return AskResponse(
                 conversation_id=conversation.id,
@@ -123,6 +126,7 @@ def ask_my_mind(
                 sources=[],
                 created_at=assistant_message.created_at or datetime.now(UTC),
             )
+        complete_operation(operation, "unstored_answer", None)
         return AskResponse(
             conversation_id=conversation_id,
             answer=answer,
@@ -166,10 +170,12 @@ def ask_my_mind(
             generated.answer,
             citation_payload,
         )
+        complete_operation(operation, "ask", assistant_message.id)
         db.commit()
         response_created_at = assistant_message.created_at or datetime.now(UTC)
         response_conversation_id = conversation.id
     else:
+        complete_operation(operation, "unstored_answer", None)
         response_created_at = datetime.now(UTC)
         response_conversation_id = conversation_id
 

@@ -1,15 +1,16 @@
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Response, status
 from fastapi.responses import JSONResponse
 
-from app.api.dependencies import CurrentUser, DbSession
+from app.api.dependencies import CurrentUser, DbSession, IdempotencyKey
 from app.schemas import ExportRequestRead
 from app.services.exports import (
     create_export_request,
     get_export_payload,
     get_export_request,
 )
+from app.services.idempotency import execute_idempotent
 
 router = APIRouter(prefix="/exports", tags=["exports"])
 
@@ -18,8 +19,13 @@ router = APIRouter(prefix="/exports", tags=["exports"])
 def create_export_route(
     db: DbSession,
     user: CurrentUser,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
 ):
-    return create_export_request(db, user)
+    return execute_idempotent(
+        db, user, "POST /exports", idempotency_key, {}, response,
+        lambda operation: create_export_request(db, user, operation=operation),
+    )
 
 
 @router.get("/{export_id}", response_model=ExportRequestRead)

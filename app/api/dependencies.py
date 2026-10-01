@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Header
 from sqlalchemy.orm import Session
 
 from app.core.auth import AuthenticatedUser, get_current_user
@@ -17,3 +17,7 @@ def get_current_app_user(db: DbSession, authenticated_user: CurrentAuthUser) -> 
 
 
 CurrentUser = Annotated[User, Depends(get_current_app_user)]
+IdempotencyKey = Annotated[
+    str | None,
+    Header(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"),
+]

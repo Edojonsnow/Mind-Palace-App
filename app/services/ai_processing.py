@@ -153,7 +153,10 @@ def process_ai_job(
     if job is None or thought is None:
         return
 
-    if job.status in {BackgroundJobStatus.COMPLETED.value, BackgroundJobStatus.CANCELLED.value}:
+    if job.status in {
+        BackgroundJobStatus.COMPLETED.value, BackgroundJobStatus.CANCELLED.value,
+        BackgroundJobStatus.RUNNING.value,
+    }:
         return
 
     source_hash = job.source_hash or enrichment_source_hash(thought)

@@ -1,14 +1,15 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
-from app.api.dependencies import CurrentUser, DbSession
+from app.api.dependencies import CurrentUser, DbSession, IdempotencyKey
 from app.schemas import AskRequest, AskResponse, ChatConversationRead
 from app.services.ask import (
     ConversationNotFoundError,
     ask_my_mind,
     get_conversation_messages,
 )
+from app.services.idempotency import execute_idempotent
 from app.services.openai_ai import AIProviderError
 
 router = APIRouter(prefix="/ask", tags=["ask-my-mind"])
@@ -19,13 +20,15 @@ def ask_my_mind_route(
     payload: AskRequest,
     db: DbSession,
     user: CurrentUser,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
 ):
     try:
-        return ask_my_mind(
-            db,
-            user,
-            payload.question,
-            payload.conversation_id,
+        return execute_idempotent(
+            db, user, "POST /ask", idempotency_key, payload.model_dump(mode="json"), response,
+            lambda operation: ask_my_mind(
+                db, user, payload.question, payload.conversation_id, operation=operation,
+            ),
         )
     except ConversationNotFoundError as error:
         raise HTTPException(

@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     ask_max_context_chars: int = 12000
     recovery_window_days: int = 30
     export_retention_hours: int = 24
+    idempotency_retention_hours: int = 24
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

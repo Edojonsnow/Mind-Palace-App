@@ -10,6 +10,7 @@ from app.models.ai import (
 from app.models.ai_preferences import AIPreferences
 from app.models.book import Book
 from app.models.chat import ChatConversation, ChatMessage, ChatMessageRole
+from app.models.idempotency import IdempotencyRequest
 from app.models.lifecycle import (
     AccountDeletionRequest,
     AccountDeletionStatus,
@@ -21,6 +22,7 @@ from app.models.user import User
 from app.models.user_settings import UserSettings
 
 __all__ = [
+    "IdempotencyRequest",
     "AIPreferences",
     "SourceType",
     "StorageScope",

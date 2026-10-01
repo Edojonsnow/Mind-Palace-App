@@ -5,11 +5,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, Response, status
 
-from app.api.dependencies import CurrentUser, DbSession
+from app.api.dependencies import CurrentUser, DbSession, IdempotencyKey
 from app.core.config import settings
 from app.models import SourceType, ThoughtType
 from app.schemas import ThoughtCreate, ThoughtRead, ThoughtUpdate
 from app.services.data_lifecycle import list_deleted_thoughts, restore_thought
+from app.services.idempotency import execute_idempotent
 from app.services.openai_ai import OpenAIProvider
 from app.services.thought_recall import RecallQuery, list_thoughts
 from app.services.thoughts import (
@@ -29,8 +30,13 @@ def create_thought_route(
     payload: ThoughtCreate,
     db: DbSession,
     user: CurrentUser,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
 ):
-    return create_thought(db, user, payload)
+    return execute_idempotent(
+        db, user, "POST /thoughts", idempotency_key, payload.model_dump(mode="json"), response,
+        lambda operation: create_thought(db, user, payload, operation=operation),
+    )
 
 
 @router.get("", response_model=list[ThoughtRead])
@@ -159,8 +165,13 @@ def retry_ai_processing_route(
     thought_id: UUID,
     db: DbSession,
     user: CurrentUser,
+    response: Response,
+    idempotency_key: IdempotencyKey = None,
 ):
-    return retry_ai_processing(db, user, thought_id)
+    return execute_idempotent(
+        db, user, f"POST /thoughts/{thought_id}/organize", idempotency_key, {}, response,
+        lambda operation: retry_ai_processing(db, user, thought_id, operation=operation),
+    )
 
 
 @router.post("/{thought_id}/restore", response_model=ThoughtRead)

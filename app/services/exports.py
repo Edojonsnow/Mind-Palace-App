@@ -13,15 +13,19 @@ from app.models import (
     BackgroundJobType,
     ExportRequest,
     ExportRequestStatus,
+    IdempotencyRequest,
     User,
 )
 from app.services.data_lifecycle import as_utc, utc_now
 from app.services.export_payload import build_export_payload
+from app.services.idempotency import complete_operation
 
 logger = logging.getLogger(__name__)
 
 
-def create_export_request(db: Session, user: User) -> ExportRequest:
+def create_export_request(
+    db: Session, user: User, *, operation: IdempotencyRequest | None = None,
+) -> ExportRequest:
     now = utc_now()
     db.execute(
         delete(ExportRequest).where(
@@ -45,6 +49,7 @@ def create_export_request(db: Session, user: User) -> ExportRequest:
     db.add(job)
     db.flush()
 
+    complete_operation(operation, "export", export.id)
     db.commit()
 
     try:

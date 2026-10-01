@@ -12,10 +12,12 @@ from app.models import (
     ThoughtType,
     User,
 )
+from app.models.idempotency import IdempotencyRequest
 from app.schemas import BookCreate, ThoughtCreate, ThoughtUpdate
 from app.services.ai_processing import purge_ai_artifacts, schedule_ai_processing
 from app.services.books import get_book, get_or_create_book
 from app.services.data_lifecycle import schedule_thought_purge
+from app.services.idempotency import complete_operation
 from app.services.settings import get_user_settings
 
 DETERMINISTIC_METADATA_FIELDS = {
@@ -43,7 +45,10 @@ def normalize_manual_tags(tags: list[str]) -> list[str]:
     return normalized
 
 
-def create_thought(db: Session, user: User, payload: ThoughtCreate) -> Thought:
+def create_thought(
+    db: Session, user: User, payload: ThoughtCreate,
+    *, operation: IdempotencyRequest | None = None,
+) -> Thought:
     if payload.storage_scope is StorageScope.LOCAL_DEVICE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -108,6 +113,7 @@ def create_thought(db: Session, user: User, payload: ThoughtCreate) -> Thought:
     )
     db.add(thought)
     db.flush()
+    complete_operation(operation, "thought", thought.id)
     if thought.use_with_ask_my_mind:
         schedule_ai_processing(db, thought)
     return thought
@@ -190,7 +196,10 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
     return thought
 
 
-def retry_ai_processing(db: Session, user: User, thought_id: UUID) -> Thought:
+def retry_ai_processing(
+    db: Session, user: User, thought_id: UUID,
+    *, operation: IdempotencyRequest | None = None,
+) -> Thought:
     thought = get_thought(db, user, thought_id)
     if not thought.use_with_ask_my_mind:
         raise HTTPException(
@@ -198,7 +207,8 @@ def retry_ai_processing(db: Session, user: User, thought_id: UUID) -> Thought:
             detail="Enable Use with Ask My Mind before retrying organization",
         )
 
-    purge_ai_artifacts(db, thought)
+    complete_operation(operation, "thought", thought.id)
+    purge_ai_artifacts(db, thought, commit=False)
     schedule_ai_processing(db, thought)
     db.refresh(thought)
     return thought

@@ -16,6 +16,7 @@ from app.models import (
     ChatConversation,
     ChatMessage,
     ExportRequest,
+    IdempotencyRequest,
     Thought,
     ThoughtChunk,
     ThoughtMetadata,
@@ -99,6 +100,7 @@ def cancel_account_deletion(db: Session, user: User) -> None:
 
 
 def purge_user_data(db: Session, user: User) -> None:
+    db.execute(delete(IdempotencyRequest).where(IdempotencyRequest.user_id == user.id))
     db.execute(delete(AIPreferences).where(AIPreferences.user_id == user.id))
     db.execute(delete(ThoughtChunk).where(ThoughtChunk.user_id == user.id))
     db.execute(delete(ThoughtMetadata).where(ThoughtMetadata.user_id == user.id))
