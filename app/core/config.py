@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     ai_queue_name: str = "mind-palace-ai"
     ai_chunk_size_chars: int = 1600
     ai_chunk_overlap_chars: int = 200
+    ai_reconciliation_interval_seconds: int = Field(default=30, ge=5)
+    ai_reconciliation_batch_size: int = Field(default=50, ge=1, le=500)
+    ai_job_stale_after_seconds: int = Field(default=900, ge=60)
+    ai_queue_retry_delay_seconds: int = Field(default=60, ge=5)
     ask_top_k: int = 5
     ask_history_messages: int = 10
     ask_max_context_chars: int = 12000

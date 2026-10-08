@@ -88,6 +88,13 @@ The API and worker use `redis://redis:6379/0` inside Compose. When running the
 API directly on the host, use the local default `redis://localhost:6379/0` and
 start Redis separately.
 
+The RQ worker also runs a database-backed AI job reconciler every 30 seconds by
+default. It repairs AI jobs that were committed before Redis dispatch, reclaims
+stale worker jobs, and retries temporary queue failures. Configure the interval,
+batch size, stale threshold, and queue retry delay with
+`AI_RECONCILIATION_INTERVAL_SECONDS`, `AI_RECONCILIATION_BATCH_SIZE`,
+`AI_JOB_STALE_AFTER_SECONDS`, and `AI_QUEUE_RETRY_DELAY_SECONDS`.
+
 Apply database migrations through the same container:
 
 ```bash
@@ -146,6 +153,10 @@ The original thought remains the source record. Chunks, embeddings, and AI
 metadata are derived artifacts that can be rebuilt or purged. Turning AI off
 deletes those artifacts and cancels pending or running jobs. OpenAI failures
 mark the job and thought as failed without undoing the saved thought.
+
+Temporary Redis dispatch failures keep the job pending with retry backoff. The
+worker reconciler repairs pending jobs whose dispatch was lost and reclaims
+stale jobs after a worker interruption.
 
 The current implementation uses `text-embedding-3-small` with 1536 dimensions
 and a configurable metadata model. The embedding dimension is part of the

@@ -82,7 +82,11 @@ def schedule_ai_processing(db: Session, thought: Thought) -> BackgroundJob:
         enqueue_ai_processing(job.id, thought.id)
     except Exception as error:
         logger.warning("Unable to enqueue AI processing job: %s", type(error).__name__)
-        _set_job_failed(db, job.id, thought.id, error)
+        job.not_before = datetime.now(UTC) + timedelta(
+            seconds=settings.ai_queue_retry_delay_seconds
+        )
+        job.error_message = type(error).__name__
+        db.commit()
 
     db.refresh(job)
     return job
@@ -205,7 +209,11 @@ def process_ai_job(
         try:
             enqueue_deferred_ai_processing(job.id, thought.id, job.not_before)
         except Exception as queue_error:
-            _set_job_failed(db, job.id, thought.id, queue_error)
+            job.not_before = datetime.now(UTC) + timedelta(
+                seconds=settings.ai_queue_retry_delay_seconds
+            )
+            job.error_message = type(queue_error).__name__
+            db.commit()
         return
 
     job.not_before = None
@@ -268,6 +276,7 @@ def process_ai_job(
         )
         thought.ai_processing_status = AIProcessingStatus.READY.value
         job.status = BackgroundJobStatus.COMPLETED.value
+        job.error_message = None
         job.completed_at = processed_at
         db.commit()
     except Exception as error:

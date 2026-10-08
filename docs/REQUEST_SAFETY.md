@@ -37,9 +37,9 @@ these keys; browser storage is not used to retain private drafts. API clients
 requiring retry across restarts must retain their own keys securely.
 
 AI workers ignore already-completed, cancelled, or running jobs. This prevents
-concurrent redelivery from repeating the provider call; a crashed running job
-must be inspected/retried through the organization action rather than silently
-executed again.
+concurrent redelivery from repeating the provider call. A separate reconciler
+reclaims a running job only after the configured stale threshold, then the
+normal worker checks decide whether it can proceed.
 
 ## Rate Limiting
 
@@ -74,13 +74,34 @@ Thought capture, editing, and AI opt-out remain available independently of AI
 allowances. Workers defer limited jobs through RQ's scheduler, storing
 `background_jobs.not_before` and keeping the thought pending. Deferred jobs
 recheck ownership, deletion, content version, and AI permission before a model
-call. A queue dispatch failure marks processing failed without losing the
-thought. The existing Postgres-to-Redis dispatch crash gap still requires
-operational recovery; this is not a transactional outbox.
+call. Queue dispatch failures remain pending with retry backoff without losing
+the thought. The reconciler closes the Postgres-to-Redis dispatch recovery gap;
+this is still not a transactional outbox or an exactly-once provider guarantee.
 
 These are per-user work limits, not token budgets, daily spending quotas,
 global capacity controls, or login/signup abuse protection. Those protections
 must be configured separately before a public rollout.
+
+## Durable AI Job Recovery
+
+The worker process runs a periodic reconciler against the durable
+`background_jobs` table. It requeues due pending `chunk_thought` jobs, reclaims
+jobs that have remained `running` past the stale-job threshold, and cancels
+work whose thought was deleted or has AI disabled. Selection uses Postgres row
+locks so multiple worker instances can run the loop safely.
+
+AI dispatch uses the database job ID as the RQ job ID with RQ's atomic unique
+enqueue. This makes recovery safe when the original process crashed after the
+database commit, after Redis accepted the job, or while another reconciler was
+working on the same row. It does not make Postgres, Redis, and OpenAI one
+exactly-once transaction: a genuinely abandoned provider call may be retried
+after a stale worker is reclaimed.
+
+Queue dispatch failures remain pending and receive a `not_before` backoff
+timestamp. Provider failures remain failed and require the existing explicit
+organization retry. The reconciliation settings are configurable through
+`AI_RECONCILIATION_INTERVAL_SECONDS`, `AI_RECONCILIATION_BATCH_SIZE`,
+`AI_JOB_STALE_AFTER_SECONDS`, and `AI_QUEUE_RETRY_DELAY_SECONDS`.
 
 ## Verification
 

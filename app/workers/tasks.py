@@ -3,6 +3,7 @@ from uuid import UUID
 from app.db.session import SessionLocal
 from app.services.accounts import process_account_deletion
 from app.services.ai_processing import process_ai_job
+from app.services.ai_recovery import reconcile_ai_jobs
 from app.services.data_lifecycle import process_thought_purge
 from app.services.exports import expire_export_request, process_export
 
@@ -11,6 +12,12 @@ def process_thought(job_id: str, thought_id: str) -> None:
     """RQ entry point; all user data access remains scoped through the job row."""
     with SessionLocal() as db:
         process_ai_job(db, UUID(job_id), UUID(thought_id))
+
+
+def reconcile_ai_processing() -> None:
+    """RQ entry point for repairing lost AI dispatches and stale workers."""
+    with SessionLocal() as db:
+        reconcile_ai_jobs(db)
 
 
 def purge_deleted_thought(job_id: str, thought_id: str) -> None:

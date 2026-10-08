@@ -174,7 +174,9 @@ def test_failed_deferred_enqueue_keeps_original_thought(client, db_session, monk
     thought = client.post("/thoughts", json={"body": "Saved", "use_with_ask_my_mind": True}).json()
     job = db_session.scalar(select(BackgroundJob))
     process_ai_job(db_session, job.id, UUID(thought["id"]))
-    assert job.status == "failed"
+    assert job.status == "pending"
+    assert job.not_before is not None
+    assert job.error_message == "ConnectionError"
     assert client.get(f"/thoughts/{thought['id']}").json()["body"] == "Saved"
 
 

@@ -35,6 +35,30 @@ The API does not wait for OpenAI before returning the saved thought. This keeps
 capture fast and isolates AI latency or provider failures from the core note-
 taking path.
 
+## Durable Job Recovery
+
+Postgres is the durable source of truth for AI jobs; Redis is only the delivery
+mechanism. The worker process runs a small reconciliation loop that periodically
+looks for:
+
+- pending jobs whose Redis dispatch was lost or whose retry time has arrived;
+- running jobs whose worker heartbeat is older than the configured stale-job
+  threshold; and
+- jobs whose thought was deleted or opted out of AI while they were waiting.
+
+Eligible jobs are selected with database row locks, then re-enqueued with the
+same RQ job ID. RQ's atomic unique enqueue prevents concurrent reconcilers from
+creating duplicate Redis work. Recovered jobs still pass the normal ownership,
+source-hash, AI-consent, rate-limit, and completion checks before OpenAI is
+called.
+
+Queue outages leave a job pending with a `not_before` backoff timestamp rather
+than permanently failing the user's capture. Provider failures remain failed
+and can be explicitly retried through the organization action. A stale-job
+recovery may cause a provider call that was already abandoned by a crashed
+worker to be attempted again; the database state and source hash prevent stale
+results from being committed.
+
 Before claiming processing, the worker checks a per-user AI job allowance.
 Limited work remains pending with a `not_before` timestamp and is rescheduled
 through RQ. Saving the original thought is not blocked. See
@@ -116,10 +140,10 @@ processing state without treating Redis as the source of truth.
 
 ## Failure Handling
 
-If Redis is unavailable, the thought remains saved and the job is marked
-failed. If OpenAI fails, the thought remains saved and the job plus thought
-status become failed. No raw thought content is written to the error message or
-logs.
+If Redis is unavailable, the thought remains saved and the job stays pending
+with retry backoff. If OpenAI fails, the thought remains saved and the job plus
+thought status become failed. No raw thought content is written to the error
+message or logs.
 
 The worker checks the thought's current AI setting before and after the OpenAI
 calls. That prevents a completed job from storing new artifacts after the user

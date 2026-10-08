@@ -1,4 +1,6 @@
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
@@ -21,6 +23,7 @@ from app.services.ai_processing import (
     schedule_ai_processing,
 )
 from app.services.ai_processing_content import AI_ENRICHMENT_SCHEMA_VERSION, semantic_text
+from app.services.ai_recovery import reconcile_ai_jobs
 from app.services.openai_ai import (
     ExtractedThoughtMetadata,
     GeneratedAskAnswer,
@@ -187,6 +190,152 @@ def test_ai_enabled_thought_creates_pending_job(
     jobs = db_session.scalars(select(BackgroundJob)).all()
     assert len(jobs) == 1
     assert jobs[0].status == BackgroundJobStatus.PENDING.value
+
+
+def test_initial_queue_failure_keeps_ai_job_recoverable(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.ai_processing.enqueue_ai_processing",
+        Mock(side_effect=ConnectionError("Redis unavailable")),
+    )
+
+    response = client.post(
+        "/thoughts",
+        json={
+            "body": "Keep this capture while the queue is unavailable.",
+            "use_with_ask_my_mind": True,
+        },
+    )
+
+    job = db_session.scalar(select(BackgroundJob))
+    thought = db_session.get(Thought, UUID(response.json()["id"]))
+    assert job is not None
+    assert thought is not None
+    assert response.status_code == 201
+    assert job.status == BackgroundJobStatus.PENDING.value
+    assert job.error_message == "ConnectionError"
+    assert job.not_before is not None
+    assert thought.ai_processing_status == AIProcessingStatus.PENDING.value
+
+
+def test_reconciler_requeues_a_stranded_pending_job(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", no_op_enqueue)
+    created = client.post(
+        "/thoughts",
+        json={"body": "This job committed before Redis dispatch.", "use_with_ask_my_mind": True},
+    )
+    thought_id = UUID(created.json()["id"])
+    job = db_session.scalar(select(BackgroundJob))
+    assert job is not None
+
+    enqueue = Mock()
+    monkeypatch.setattr("app.services.ai_recovery.enqueue_ai_processing", enqueue)
+    result = reconcile_ai_jobs(db_session, now=datetime.now(UTC))
+
+    assert result.requeued == 1
+    assert result.stale_recovered == 0
+    enqueue.assert_called_once_with(job.id, thought_id)
+    db_session.expire_all()
+    recovered = db_session.get(BackgroundJob, job.id)
+    assert recovered is not None
+    assert recovered.status == BackgroundJobStatus.PENDING.value
+    assert recovered.not_before is None
+    assert recovered.error_message is None
+
+
+def test_reconciler_reclaims_a_stale_running_job(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", no_op_enqueue)
+    created = client.post(
+        "/thoughts",
+        json={"body": "A worker died during this job.", "use_with_ask_my_mind": True},
+    )
+    thought_id = UUID(created.json()["id"])
+    job = db_session.scalar(select(BackgroundJob))
+    assert job is not None
+    now = datetime.now(UTC)
+    job.status = BackgroundJobStatus.RUNNING.value
+    job.started_at = now - timedelta(seconds=settings.ai_job_stale_after_seconds + 1)
+    db_session.commit()
+
+    enqueue = Mock()
+    monkeypatch.setattr("app.services.ai_recovery.enqueue_ai_processing", enqueue)
+    result = reconcile_ai_jobs(db_session, now=now)
+
+    assert result.requeued == 1
+    assert result.stale_recovered == 1
+    enqueue.assert_called_once_with(job.id, thought_id)
+    db_session.expire_all()
+    recovered = db_session.get(BackgroundJob, job.id)
+    assert recovered is not None
+    assert recovered.status == BackgroundJobStatus.PENDING.value
+    assert recovered.started_at is None
+
+
+def test_reconciler_does_not_touch_a_fresh_running_job(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", no_op_enqueue)
+    client.post(
+        "/thoughts",
+        json={"body": "A worker is still processing this.", "use_with_ask_my_mind": True},
+    )
+    job = db_session.scalar(select(BackgroundJob))
+    assert job is not None
+    now = datetime.now(UTC)
+    job.status = BackgroundJobStatus.RUNNING.value
+    job.started_at = now - timedelta(seconds=settings.ai_job_stale_after_seconds - 1)
+    db_session.commit()
+
+    enqueue = Mock()
+    monkeypatch.setattr("app.services.ai_recovery.enqueue_ai_processing", enqueue)
+    result = reconcile_ai_jobs(db_session, now=now)
+
+    assert result.requeued == 0
+    assert result.stale_recovered == 0
+    enqueue.assert_not_called()
+    assert job.status == BackgroundJobStatus.RUNNING.value
+
+
+def test_reconciler_keeps_dispatch_failure_pending_for_retry(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", no_op_enqueue)
+    client.post(
+        "/thoughts",
+        json={"body": "Retry dispatch without losing this thought.", "use_with_ask_my_mind": True},
+    )
+    job = db_session.scalar(select(BackgroundJob))
+    assert job is not None
+
+    monkeypatch.setattr(
+        "app.services.ai_recovery.enqueue_ai_processing",
+        Mock(side_effect=ConnectionError("Redis unavailable")),
+    )
+    result = reconcile_ai_jobs(db_session, now=datetime.now(UTC))
+
+    assert result.requeued == 0
+    assert result.dispatch_failures == 1
+    db_session.expire_all()
+    pending = db_session.get(BackgroundJob, job.id)
+    assert pending is not None
+    assert pending.status == BackgroundJobStatus.PENDING.value
+    assert pending.not_before is not None
+    assert pending.error_message == "ConnectionError"
 
 
 def test_worker_creates_chunks_embeddings_and_metadata(

@@ -3,6 +3,7 @@ from uuid import UUID
 
 from redis import Redis
 from rq import Queue
+from rq.exceptions import DuplicateJobError
 
 from app.core.config import settings
 
@@ -22,13 +23,19 @@ def get_ai_queue() -> Queue:
 def enqueue_ai_processing(job_id: UUID, thought_id: UUID) -> None:
     from app.workers.tasks import process_thought
 
-    get_ai_queue().enqueue(
-        process_thought,
-        str(job_id),
-        str(thought_id),
-        job_id=str(job_id),
-        result_ttl=0,
-    )
+    try:
+        get_ai_queue().enqueue(
+            process_thought,
+            str(job_id),
+            str(thought_id),
+            job_id=str(job_id),
+            result_ttl=0,
+            unique=True,
+        )
+    except DuplicateJobError:
+        # A reconciler may race with the original dispatcher. The atomic RQ
+        # unique enqueue means the existing Redis job is already sufficient.
+        return
 
 
 def enqueue_deferred_ai_processing(job_id: UUID, thought_id: UUID, run_at: datetime) -> None:
