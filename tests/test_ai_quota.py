@@ -140,6 +140,41 @@ def test_worker_defers_organization_until_daily_quota_resets(
     deferred.assert_called_once()
 
 
+def test_reenabling_ai_reserves_organization_units_for_reembedding(
+    client, db_session, monkeypatch,
+):
+    monkeypatch.setattr(settings, "ai_daily_quota_units", 5)
+    client.get("/settings")
+    created = client.post(
+        "/thoughts",
+        json={"body": "Re-enable this thought", "use_with_ask_my_mind": False},
+    )
+    thought_id = UUID(created.json()["id"])
+
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", lambda *args: None)
+    updated = client.patch(
+        f"/thoughts/{thought_id}",
+        json={"use_with_ask_my_mind": True},
+    )
+    assert updated.status_code == 200
+
+    job = db_session.scalar(
+        select(BackgroundJob).where(BackgroundJob.thought_id == thought_id)
+    )
+    assert job is not None
+    process_ai_job(
+        db_session,
+        job.id,
+        thought_id,
+        provider_factory=lambda: FakeAIProvider(),
+    )
+
+    usage = db_session.scalar(select(AIUsageDaily))
+    assert usage is not None
+    assert usage.organization_count == 1
+    assert usage.units_used == settings.ai_quota_organization_units
+
+
 def test_ai_enabled_thoughts_are_rejected_above_configured_size(client, monkeypatch):
     monkeypatch.setattr(settings, "ai_max_thought_chars", 10)
 

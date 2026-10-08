@@ -2,7 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from redis import Redis
-from rq import Queue
+from rq import Queue, Retry
 from rq.exceptions import DuplicateJobError
 
 from app.core.config import settings
@@ -89,10 +89,19 @@ def enqueue_export_expiry(export_id: UUID, run_at: datetime) -> None:
 def enqueue_account_deletion(request_id: UUID, run_at: datetime) -> None:
     from app.workers.tasks import purge_deleted_account
 
-    get_ai_queue().enqueue_at(
-        run_at,
-        purge_deleted_account,
-        str(request_id),
-        job_id=f"purge-account-{request_id}",
-        result_ttl=0,
-    )
+    try:
+        get_ai_queue().enqueue_at(
+            run_at,
+            purge_deleted_account,
+            str(request_id),
+            job_id=f"purge-account-{request_id}",
+            result_ttl=0,
+            retry=Retry(
+                max=settings.account_deletion_retry_max,
+                interval=settings.account_deletion_retry_interval_seconds,
+            ),
+        )
+    except DuplicateJobError:
+        # The scheduler and reconciliation loop can race without creating a
+        # second account-purge job.
+        return

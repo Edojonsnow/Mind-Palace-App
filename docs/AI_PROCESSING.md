@@ -71,6 +71,10 @@ semantic search reserve their own weighted action units at their API boundary;
 the latter can use lexical fallback when its optional semantic allowance is
 exhausted.
 
+Organization units are also consumed when AI is re-enabled for a thought, or
+when an edited thought is reprocessed, because the thought must be embedded and
+organized again.
+
 ## Why Chunking Exists
 
 An embedding represents a piece of text as a vector of numbers. Similar meaning

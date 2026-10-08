@@ -25,6 +25,7 @@ from app.models import (
     UserSettings,
 )
 from app.services.data_lifecycle import as_utc
+from app.services.neon_auth_admin import delete_neon_auth_user
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +133,7 @@ def process_account_deletion(db: Session, request_id: UUID) -> None:
         return
 
     try:
+        delete_neon_auth_user(user.auth_user_id)
         purge_user_data(db, user)
     except Exception as error:
         db.rollback()
@@ -139,4 +141,50 @@ def process_account_deletion(db: Session, request_id: UUID) -> None:
         if request is not None:
             request.error_message = type(error).__name__
             db.commit()
-        logger.warning("Account deletion failed: error_type=%s", type(error).__name__)
+        logger.warning(
+            "Account deletion failed: error_type=%s", type(error).__name__
+        )
+        raise
+
+
+def reconcile_account_deletions(
+    db: Session,
+    *,
+    now: datetime | None = None,
+    limit: int | None = None,
+) -> tuple[int, int]:
+    """Requeue due account purges whose scheduled RQ job was lost."""
+    now = now or datetime.now(UTC)
+    requests = list(
+        db.scalars(
+            select(AccountDeletionRequest)
+            .where(
+                AccountDeletionRequest.status == AccountDeletionStatus.PENDING.value,
+                AccountDeletionRequest.purge_at <= now,
+            )
+            .order_by(AccountDeletionRequest.purge_at.asc(), AccountDeletionRequest.id.asc())
+            .limit(limit or settings.account_deletion_reconciliation_batch_size)
+        )
+    )
+    requeued = 0
+    failures = 0
+
+    from app.core.queue import enqueue_account_deletion
+
+    for request in requests:
+        try:
+            enqueue_account_deletion(request.id, now)
+        except Exception as error:
+            request.error_message = type(error).__name__
+            failures += 1
+            logger.warning(
+                "Unable to requeue account deletion: error_type=%s",
+                type(error).__name__,
+            )
+        else:
+            request.error_message = None
+            requeued += 1
+
+    if requests:
+        db.commit()
+    return requeued, failures

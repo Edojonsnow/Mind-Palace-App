@@ -4,7 +4,7 @@
 
 `DELETE /thoughts/{thought_id}` performs a soft delete. The thought receives a
 `deleted_at` timestamp and a `purge_at` timestamp based on
-`RECOVERY_WINDOW_DAYS`, which defaults to 30 days.
+`RECOVERY_WINDOW_DAYS`, which defaults to 60 days.
 
 During the recovery window:
 
@@ -17,6 +17,8 @@ The API schedules a delayed RQ job when a thought is deleted. The worker runs
 with `with_scheduler=True`, so the delayed job survives worker restarts. When
 the window expires, the job removes the thought, chunks, embeddings, metadata,
 pending thought jobs, and citations to the thought from stored chat messages.
+The worker reconciliation loop also purges expired thoughts directly if a
+scheduled job was lost.
 
 ## Exports
 
@@ -36,13 +38,17 @@ cleans it up.
 
 `POST /account/deletion` schedules deletion of all Mind Palace data after the
 same recovery window. `DELETE /account/deletion` cancels a pending request.
-When the delayed job runs, it removes thoughts, AI artifacts, chats, exports,
-settings, AI preferences, profile fields, and the local Mind Palace user record.
+When the delayed job runs, it first permanently deletes the user's Neon Auth
+identity through the branch-scoped Neon management API, then removes thoughts,
+AI artifacts, chats, exports, settings, AI preferences, profile fields, and the
+local Mind Palace user record. The worker treats an already-missing Neon Auth
+identity as success so an interrupted purge can be retried safely.
 
-The current API does not call a Neon Auth administrative endpoint. Therefore,
-the Neon Auth identity is outside this data purge and must be removed through a
-separate provider integration before production account deletion is described
-as fully complete.
+Production account deletion requires `NEON_API_KEY`, `NEON_PROJECT_ID`, and
+`NEON_AUTH_BRANCH_ID`. The API fails closed when those values are missing; it
+does not purge local data while the Auth identity cannot be deleted.
+The account purge job retries transient failures through RQ and the worker
+reconciliation loop requeues due requests whose scheduled job was lost.
 
 ## Privacy Checks
 

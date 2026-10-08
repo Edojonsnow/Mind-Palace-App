@@ -33,12 +33,20 @@ class Settings(BaseSettings):
     ai_reconciliation_batch_size: int = Field(default=50, ge=1, le=500)
     ai_job_stale_after_seconds: int = Field(default=900, ge=60)
     ai_queue_retry_delay_seconds: int = Field(default=60, ge=5)
+    account_deletion_reconciliation_batch_size: int = Field(default=50, ge=1, le=500)
+    account_deletion_retry_max: int = Field(default=5, ge=1)
+    account_deletion_retry_interval_seconds: int = Field(default=300, ge=5)
     ask_top_k: int = 5
     ask_history_messages: int = 10
     ask_max_context_chars: int = 12000
-    recovery_window_days: int = 30
+    recovery_window_days: int = Field(default=60, ge=1)
     export_retention_hours: int = 24
     idempotency_retention_hours: int = 24
+    neon_api_key: str | None = None
+    neon_project_id: str | None = None
+    neon_auth_branch_id: str | None = None
+    neon_management_api_base_url: str = "https://console.neon.tech/api/v2"
+    neon_management_api_timeout_seconds: float = Field(default=10.0, ge=1.0)
     rate_limits_enabled: bool = True
     rate_limit_ask_per_minute: int = Field(default=10, ge=1)
     rate_limit_search_per_minute: int = Field(default=60, ge=1)

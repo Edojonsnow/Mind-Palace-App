@@ -63,6 +63,20 @@ NEON_AUTH_JWKS_URL=https://<auth-host>/neondb/auth/.well-known/jwks.json
 
 `NEON_AUTH_BASE_URL` is the Neon Auth API base URL (`https://<auth-host>/neondb/auth`). It is used to validate opaque session tokens when a JWT is not available. If omitted, the API derives it from `NEON_AUTH_JWKS_URL`.
 
+Permanent account deletion also requires a server-side Neon API key and the
+target project and branch identifiers:
+
+```bash
+NEON_API_KEY=
+NEON_PROJECT_ID=
+NEON_AUTH_BRANCH_ID=
+NEON_MANAGEMENT_API_BASE_URL=https://console.neon.tech/api/v2
+```
+
+Keep `NEON_API_KEY` in the real environment only; never commit it or expose it
+to the web client. The account deletion worker uses these values to delete the
+Neon Auth identity after the 60-day recovery window.
+
 See [Database Environments](docs/DATABASE_ENVIRONMENTS.md) for development, staging, and production setup.
 
 Run the API:

@@ -17,7 +17,7 @@ from app.models import (
     ThoughtMetadata,
     User,
 )
-from app.services.accounts import process_account_deletion
+from app.services.accounts import process_account_deletion, reconcile_account_deletions
 from app.services.data_lifecycle import purge_expired_thoughts
 from app.services.exports import process_export
 
@@ -187,13 +187,63 @@ def test_account_deletion_can_be_cancelled_and_resubmitted(
 
     request = db_session.get(AccountDeletionRequest, UUID(second_response.json()["id"]))
     assert request is not None
+    assert request.purge_at - request.requested_at >= timedelta(days=59)
     request.purge_at = datetime.now(UTC) - timedelta(days=1)
     db_session.commit()
     user = current_user(db_session)
+    monkeypatch.setattr("app.services.accounts.delete_neon_auth_user", lambda *args: None)
 
     process_account_deletion(db_session, request.id)
 
     assert db_session.get(User, user.id) is None
+
+
+def test_account_deletion_fails_closed_when_auth_identity_cannot_be_deleted(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.core.queue.enqueue_account_deletion", lambda *args: None)
+    monkeypatch.setattr(
+        "app.services.accounts.delete_neon_auth_user",
+        lambda *args: (_ for _ in ()).throw(RuntimeError("auth unavailable")),
+    )
+
+    response = client.post("/account/deletion")
+    request = db_session.get(AccountDeletionRequest, UUID(response.json()["id"]))
+    assert request is not None
+    request.purge_at = datetime.now(UTC) - timedelta(days=1)
+    db_session.commit()
+    user = current_user(db_session)
+
+    try:
+        process_account_deletion(db_session, request.id)
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("account deletion should fail when Neon Auth deletion fails")
+
+    assert db_session.get(User, user.id) is not None
+    request = db_session.get(AccountDeletionRequest, request.id)
+    assert request is not None
+    assert request.status == "pending"
+    assert request.error_message == "RuntimeError"
+
+
+def test_account_deletion_reconciliation_requeues_due_request(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.core.queue.enqueue_account_deletion", lambda *args: None)
+    response = client.post("/account/deletion")
+    request = db_session.get(AccountDeletionRequest, UUID(response.json()["id"]))
+    assert request is not None
+    request.purge_at = datetime.now(UTC) - timedelta(days=1)
+    db_session.commit()
+
+    assert reconcile_account_deletions(db_session) == (1, 0)
+    assert db_session.get(AccountDeletionRequest, request.id).error_message is None
 
 
 def test_account_deletion_dispatch_failure_preserves_failed_request(
