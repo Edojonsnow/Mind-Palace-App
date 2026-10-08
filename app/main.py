@@ -1,7 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import account, ask, books, exports, health, profile, remember, thoughts
+from app.api.routes import (
+    account,
+    ask,
+    books,
+    exports,
+    health,
+    internal,
+    profile,
+    remember,
+    thoughts,
+)
 from app.api.routes import settings as settings_routes
 from app.core.config import settings
 
@@ -30,6 +40,7 @@ def create_app() -> FastAPI:
         ],
     )
     app.include_router(health.router)
+    app.include_router(internal.router)
     app.include_router(profile.router)
     app.include_router(ask.router)
     app.include_router(books.router)

@@ -63,6 +63,20 @@ NEON_AUTH_JWKS_URL=https://<auth-host>/neondb/auth/.well-known/jwks.json
 
 `NEON_AUTH_BASE_URL` is the Neon Auth API base URL (`https://<auth-host>/neondb/auth`). It is used to validate opaque session tokens when a JWT is not available. If omitted, the API derives it from `NEON_AUTH_JWKS_URL`.
 
+For staging and production, enable the shared Redis limiter used by the web
+authentication proxy with the same private token configured in Vercel:
+
+```bash
+AUTH_RATE_LIMITS_ENABLED=true
+AUTH_RATE_LIMIT_TOKEN=<random-shared-secret>
+```
+
+The internal `/internal/auth-rate-limit` route is not included in OpenAPI and
+requires that token. It admits sign-up, sign-in, verification, and password
+reset requests before Neon Auth receives them. Keep the token out of browser
+environment variables and leave the feature disabled in local development
+unless the web proxy is also configured to call the local API.
+
 Permanent account deletion also requires a server-side Neon API key and the
 target project and branch identifiers:
 

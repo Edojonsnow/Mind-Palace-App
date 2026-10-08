@@ -3,11 +3,12 @@ from unittest.mock import Mock
 from uuid import UUID, uuid4
 
 import pytest
+from pydantic import SecretStr
 from redis.exceptions import ConnectionError
 from sqlalchemy import func, select
 
 from app.core.config import Settings, settings
-from app.core.rate_limit import enforce_rate_limit
+from app.core.rate_limit import enforce_auth_rate_limit, enforce_rate_limit
 from app.core.request_errors import RequestNotStartedError
 from app.models import BackgroundJob, ChatMessage, ExportRequest, IdempotencyRequest, Thought
 from app.services.ai_processing import process_ai_job
@@ -53,6 +54,53 @@ def test_disabled_limiter_does_not_connect(monkeypatch):
 def test_limits_must_be_positive():
     with pytest.raises(ValueError):
         Settings(rate_limit_ask_per_minute=0)
+
+
+def test_auth_limiter_uses_separate_action_windows(monkeypatch):
+    monkeypatch.setattr(settings, "auth_rate_limits_enabled", True)
+    connection = Mock()
+    connection.eval.side_effect = [[1, 600_000], [0, 12_001], [1, 300_000]]
+    monkeypatch.setattr("app.core.rate_limit.get_redis_connection", lambda: connection)
+    client_key = "a" * 64
+
+    enforce_auth_rate_limit(client_key, "sign_up")
+    with pytest.raises(RequestNotStartedError) as denied:
+        enforce_auth_rate_limit(client_key, "sign_up")
+    assert denied.value.status_code == 429
+    assert denied.value.headers["Retry-After"] == "13"
+    enforce_auth_rate_limit(client_key, "sign_in")
+    first, _, third = connection.eval.call_args_list
+    assert first.args[2] == f"mind-palace:rate:auth:sign_up:{client_key}"
+    assert third.args[2] == f"mind-palace:rate:auth:sign_in:{client_key}"
+    assert first.args[3:] == (5, 600_000)
+
+
+def test_internal_auth_rate_limit_requires_shared_token(client, monkeypatch):
+    monkeypatch.setattr(settings, "auth_rate_limits_enabled", True)
+    monkeypatch.setattr(settings, "auth_rate_limit_token", SecretStr("shared-token"))
+    payload = {"client_key": "a" * 64, "action": "sign_in"}
+    response = client.post(
+        "/internal/auth-rate-limit",
+        json=payload,
+        headers={"X-Internal-Auth-Rate-Limit-Token": "wrong-token"},
+    )
+    assert response.status_code == 401
+
+
+def test_internal_auth_rate_limit_returns_no_content_after_admission(client, monkeypatch):
+    monkeypatch.setattr(settings, "auth_rate_limits_enabled", True)
+    monkeypatch.setattr(settings, "auth_rate_limit_token", SecretStr("shared-token"))
+    admission = Mock()
+    monkeypatch.setattr("app.api.routes.internal.enforce_auth_rate_limit", admission)
+    payload = {"client_key": "b" * 64, "action": "verification"}
+    response = client.post(
+        "/internal/auth-rate-limit",
+        json=payload,
+        headers={"X-Internal-Auth-Rate-Limit-Token": "shared-token"},
+    )
+    assert response.status_code == 204
+    assert response.content == b""
+    admission.assert_called_once_with("b" * 64, "verification")
 
 
 def denied(*args):

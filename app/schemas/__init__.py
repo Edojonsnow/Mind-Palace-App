@@ -11,6 +11,7 @@ from app.schemas.ask import (
 from app.schemas.book import BookCreate, BookRead
 from app.schemas.lifecycle import AccountDeletionRequestRead, ExportRequestRead
 from app.schemas.recall import SearchMode
+from app.schemas.security import AuthRateLimitRequest
 from app.schemas.settings import UserSettingsRead, UserSettingsUpdate
 from app.schemas.thought import ThoughtCreate, ThoughtMetadataRead, ThoughtRead, ThoughtUpdate
 
@@ -22,6 +23,7 @@ __all__ = [
     "BookCreate",
     "BookRead",
     "AccountDeletionRequestRead",
+    "AuthRateLimitRequest",
     "ChatConversationRead",
     "ChatMessageRead",
     "ExportRequestRead",
