@@ -1,7 +1,8 @@
 from fastapi import APIRouter
 
 from app.api.dependencies import CurrentUser, DbSession
-from app.schemas import UserSettingsRead, UserSettingsUpdate
+from app.schemas import AIUsageRead, UserSettingsRead, UserSettingsUpdate
+from app.services.ai_usage import get_ai_usage
 from app.services.settings import get_user_settings, update_user_settings
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -13,6 +14,11 @@ def get_settings_route(
     user: CurrentUser,
 ):
     return get_user_settings(db, user)
+
+
+@router.get("/ai-usage", response_model=AIUsageRead)
+def get_ai_usage_route(db: DbSession, user: CurrentUser):
+    return get_ai_usage(db, user)
 
 
 @router.patch("", response_model=UserSettingsRead)

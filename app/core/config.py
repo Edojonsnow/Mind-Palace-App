@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     rate_limit_organize_per_minute: int = Field(default=10, ge=1)
     rate_limit_exports_per_hour: int = Field(default=3, ge=1)
     rate_limit_ai_jobs_per_minute: int = Field(default=20, ge=1)
+    ai_quotas_enabled: bool = True
+    ai_daily_quota_units: int = Field(default=200, ge=1)
+    ai_quota_ask_units: int = Field(default=2, ge=1)
+    ai_quota_search_units: int = Field(default=1, ge=1)
+    ai_quota_organization_units: int = Field(default=2, ge=1)
+    ai_max_thought_chars: int = Field(default=50000, ge=1000)
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",

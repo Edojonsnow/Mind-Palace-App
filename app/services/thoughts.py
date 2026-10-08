@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.ai_quota import validate_ai_thought_size
 from app.core.config import settings
 from app.core.rate_limit import enforce_rate_limit
 from app.models import (
@@ -62,6 +63,8 @@ def create_thought(
         if payload.use_with_ask_my_mind is None
         else payload.use_with_ask_my_mind
     )
+    if use_with_ask:
+        validate_ai_thought_size(payload.body)
     book = None
     if payload.book_id is not None:
         if payload.thought_type is not ThoughtType.BOOK_EXCERPT:
@@ -181,6 +184,9 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
         elif key == "manual_tags" and value is not None:
             value = normalize_manual_tags(value)
         setattr(thought, key, value)
+
+    if thought.use_with_ask_my_mind:
+        validate_ai_thought_size(thought.body)
 
     db.flush()
 

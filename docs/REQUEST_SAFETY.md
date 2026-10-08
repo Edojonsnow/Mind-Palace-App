@@ -65,10 +65,16 @@ so an explicit retry with the same key can proceed later. Completed idempotent
 replays do not consume another allowance. Failed downstream work still consumes
 an admission; the limiter is not a billing ledger.
 
-Recall falls back to lexical search rather than making another embedding call
-when its allowance is exhausted or Redis is unavailable. It returns 200 with
-`X-Search-Fallback` and `Retry-After`; the web displays a text-search notice.
-Browsing without a query does not consume the semantic-search allowance.
+Recall has two explicit modes. Keyword search is the default, uses ordinary
+case-insensitive text matching, and does not consume AI quota. Semantic search
+must be requested with `search_mode=semantic`; it embeds the query, uses the
+semantic/hybrid ranking path, and consumes the semantic-search allowance.
+Semantic search falls back to keyword matching rather than making another
+embedding call when its allowance is exhausted, Redis is unavailable, or the
+provider cannot be used. It returns 200 with `X-Search-Mode: keyword`,
+`X-Search-Fallback`, and (when applicable) `Retry-After`; the web displays a
+mode-specific notice. Browsing without a query does not consume the
+semantic-search allowance.
 
 Thought capture, editing, and AI opt-out remain available independently of AI
 allowances. Workers defer limited jobs through RQ's scheduler, storing
@@ -79,8 +85,33 @@ the thought. The reconciler closes the Postgres-to-Redis dispatch recovery gap;
 this is still not a transactional outbox or an exactly-once provider guarantee.
 
 These are per-user work limits, not token budgets, daily spending quotas,
-global capacity controls, or login/signup abuse protection. Those protections
-must be configured separately before a public rollout.
+global capacity controls, or login/signup abuse protection. Daily AI quotas are
+implemented separately below.
+
+## Daily AI Quotas
+
+The API keeps a durable UTC-day usage row per user in `ai_usage_daily`. It
+counts weighted AI actions rather than attempting to infer a currency cost from
+provider-specific token pricing:
+
+| Work | Default units | Environment variable |
+| --- | ---: | --- |
+| Ask My Mind | 2 | `AI_QUOTA_ASK_UNITS` |
+| Semantic search | 1 | `AI_QUOTA_SEARCH_UNITS` |
+| Thought organization | 2 | `AI_QUOTA_ORGANIZATION_UNITS` |
+
+The default daily allowance is 200 units through `AI_DAILY_QUOTA_UNITS`. The
+reservation is atomic in Postgres and occurs before the corresponding provider
+call. A rejected Ask or organization request returns 429 with `Retry-After`
+until the next UTC day. Semantic search falls back to lexical search and marks
+the response with `X-Search-Fallback: quota`. Capturing or editing a thought
+does not consume a quota and remains available when the allowance is exhausted.
+
+`GET /settings/ai-usage` exposes today's counters and reset time so a client can
+show the user what remains. `AI_QUOTAS_ENABLED=false` is intended for local
+development or controlled test environments, not public production traffic.
+The backend also rejects AI-enabled thoughts larger than
+`AI_MAX_THOUGHT_CHARS` before enqueueing work.
 
 ## Durable AI Job Recovery
 

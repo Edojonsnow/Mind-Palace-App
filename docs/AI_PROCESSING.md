@@ -64,6 +64,13 @@ Limited work remains pending with a `not_before` timestamp and is rescheduled
 through RQ. Saving the original thought is not blocked. See
 [Request Safety](REQUEST_SAFETY.md) for limits and failure behavior.
 
+The worker also reserves a durable daily organization quota before calling
+OpenAI. When the daily allowance is exhausted, the job remains pending until
+the next UTC day instead of being marked as a provider failure. Ask and
+semantic search reserve their own weighted action units at their API boundary;
+the latter can use lexical fallback when its optional semantic allowance is
+exhausted.
+
 ## Why Chunking Exists
 
 An embedding represents a piece of text as a vector of numbers. Similar meaning

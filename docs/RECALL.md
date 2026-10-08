@@ -48,8 +48,14 @@ X-Total-Pages: 3
 Example:
 
 ```text
-GET /thoughts?q=focus&tag=work&is_archived=false&page=1&page_size=20
+GET /thoughts?q=focus&search_mode=keyword&tag=work&is_archived=false&page=1&page_size=20
 ```
+
+`search_mode=keyword` is the default and searches note text and source fields
+without using AI quota. `search_mode=semantic` is an explicit opt-in for
+meaning-based retrieval; it embeds the query and may fall back to keyword
+search when AI capacity is unavailable. The response reports the effective
+mode in `X-Search-Mode` and explains a fallback in `X-Search-Fallback`.
 
 ## Implementation Boundary
 

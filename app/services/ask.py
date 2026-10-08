@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.ai_quota import reserve_ai_quota
 from app.core.config import settings
 from app.core.rate_limit import enforce_rate_limit
 from app.models import ChatConversation, ChatMessage, ChatMessageRole, IdempotencyRequest, User
@@ -92,6 +93,10 @@ def ask_my_mind(
     enforce_rate_limit(user.id, "ask")
     user_settings = get_user_settings(db, user)
     should_store_history = user_settings.store_chat_history
+    has_sources = has_retrievable_chunks(db, user)
+    if has_sources:
+        reserve_ai_quota(db, user.id, "ask", units=settings.ai_quota_ask_units)
+        db.commit()
     conversation: ChatConversation | None = None
     history: list[dict[str, str]] = []
 
@@ -110,7 +115,7 @@ def ask_my_mind(
     else:
         conversation_id = conversation_id or uuid4()
 
-    if not has_retrievable_chunks(db, user):
+    if not has_sources:
         answer = no_source_answer()
         if should_store_history and conversation is not None:
             assistant_message = _save_message(

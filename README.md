@@ -158,6 +158,13 @@ Temporary Redis dispatch failures keep the job pending with retry backoff. The
 worker reconciler repairs pending jobs whose dispatch was lost and reclaims
 stale jobs after a worker interruption.
 
+AI work also has a durable per-user daily quota. Ask My Mind and organization
+reserve weighted units before provider calls, while explicitly requested
+semantic search falls back to lexical search when its allowance is exhausted.
+View the current counters with `GET /settings/ai-usage`; configure the default
+allowance and action weights with the `AI_DAILY_QUOTA_UNITS` and `AI_QUOTA_*`
+environment variables.
+
 The current implementation uses `text-embedding-3-small` with 1536 dimensions
 and a configurable metadata model. The embedding dimension is part of the
 database schema; changing it requires a migration.

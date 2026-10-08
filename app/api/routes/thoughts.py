@@ -6,11 +6,12 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Response, status
 
 from app.api.dependencies import CurrentUser, DbSession, IdempotencyKey
+from app.core.ai_quota import AIQuotaExceededError, reserve_ai_quota
 from app.core.config import settings
 from app.core.rate_limit import enforce_rate_limit
 from app.core.request_errors import RequestNotStartedError
 from app.models import SourceType, ThoughtType
-from app.schemas import ThoughtCreate, ThoughtRead, ThoughtUpdate
+from app.schemas import SearchMode, ThoughtCreate, ThoughtRead, ThoughtUpdate
 from app.services.data_lifecycle import list_deleted_thoughts, restore_thought
 from app.services.idempotency import execute_idempotent
 from app.services.openai_ai import OpenAIProvider
@@ -59,13 +60,14 @@ def list_thoughts_route(
     is_archived: bool | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
+    search_mode: SearchMode = SearchMode.KEYWORD,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ):
     logger.info(
         "Recall request received: has_query=%s query_length=%d has_tag=%s has_book=%s "
         "has_theme=%s has_emotion=%s has_person=%s has_place=%s thought_type=%s "
-        "source_type=%s is_archived=%s page=%d page_size=%d",
+        "source_type=%s is_archived=%s search_mode=%s page=%d page_size=%d",
         bool(q and q.strip()),
         len(q.strip()) if q else 0,
         bool(tag and tag.strip()),
@@ -77,20 +79,32 @@ def list_thoughts_route(
         thought_type.value if thought_type else None,
         source_type.value if source_type else None,
         is_archived,
+        search_mode.value,
         page,
         page_size,
     )
     query_embedding = None
-    if q and q.strip() and settings.openai_api_key:
+    effective_search_mode = SearchMode.KEYWORD
+    if search_mode is SearchMode.SEMANTIC and q and q.strip() and not settings.openai_api_key:
+        response.headers["X-Search-Fallback"] = "unavailable"
+    elif search_mode is SearchMode.SEMANTIC and q and q.strip() and settings.openai_api_key:
         try:
             enforce_rate_limit(user.id, "semantic_search")
+            reserve_ai_quota(db, user.id, "search", units=settings.ai_quota_search_units)
+            db.commit()
             query_embedding = OpenAIProvider().embed([q.strip()])[0]
+            effective_search_mode = SearchMode.SEMANTIC
+        except AIQuotaExceededError as error:
+            db.rollback()
+            response.headers["X-Search-Fallback"] = "quota"
+            response.headers["Retry-After"] = error.headers["Retry-After"]
         except RequestNotStartedError as error:
             response.headers["X-Search-Fallback"] = (
                 "rate-limit" if error.status_code == 429 else "unavailable"
             )
             response.headers["Retry-After"] = error.headers["Retry-After"]
         except Exception as error:
+            response.headers["X-Search-Fallback"] = "unavailable"
             logger.warning(
                 "Recall semantic search unavailable: error_type=%s",
                 type(error).__name__,
@@ -117,6 +131,7 @@ def list_thoughts_route(
         ),
         query_embedding=query_embedding,
     )
+    response.headers["X-Search-Mode"] = effective_search_mode.value
     response.headers["X-Total-Count"] = str(result.total)
     response.headers["X-Page"] = str(page)
     response.headers["X-Page-Size"] = str(page_size)

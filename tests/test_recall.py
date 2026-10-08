@@ -37,7 +37,9 @@ def test_recall_searches_text_and_returns_pagination_headers(client: TestClient)
     assert response.headers["X-Page"] == "1"
     assert response.headers["X-Page-Size"] == "10"
     assert response.headers["X-Total-Pages"] == "1"
+    assert response.headers["X-Search-Mode"] == "keyword"
     assert "X-Total-Count" in response.headers["Access-Control-Expose-Headers"]
+    assert "X-Search-Mode" in response.headers["Access-Control-Expose-Headers"]
 
 
 def test_recall_hybrid_search_finds_semantically_related_thoughts(

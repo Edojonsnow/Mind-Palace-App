@@ -128,6 +128,62 @@
         "title": "AIProcessingStatus",
         "type": "string"
       },
+      "AIUsageRead": {
+        "properties": {
+          "ask_count": {
+            "minimum": 0.0,
+            "title": "Ask Count",
+            "type": "integer"
+          },
+          "daily_limit": {
+            "minimum": 1.0,
+            "title": "Daily Limit",
+            "type": "integer"
+          },
+          "organization_count": {
+            "minimum": 0.0,
+            "title": "Organization Count",
+            "type": "integer"
+          },
+          "remaining_units": {
+            "minimum": 0.0,
+            "title": "Remaining Units",
+            "type": "integer"
+          },
+          "resets_at": {
+            "format": "date-time",
+            "title": "Resets At",
+            "type": "string"
+          },
+          "search_count": {
+            "minimum": 0.0,
+            "title": "Search Count",
+            "type": "integer"
+          },
+          "units_used": {
+            "minimum": 0.0,
+            "title": "Units Used",
+            "type": "integer"
+          },
+          "usage_date": {
+            "format": "date",
+            "title": "Usage Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "usage_date",
+          "units_used",
+          "daily_limit",
+          "remaining_units",
+          "ask_count",
+          "search_count",
+          "organization_count",
+          "resets_at"
+        ],
+        "title": "AIUsageRead",
+        "type": "object"
+      },
       "AccountDeletionRequestRead": {
         "properties": {
           "completed_at": {
@@ -669,6 +725,15 @@
         ],
         "title": "RememberOverview",
         "type": "object"
+      },
+      "SearchMode": {
+        "description": "Retrieval strategy requested by the Recall client.",
+        "enum": [
+          "keyword",
+          "semantic"
+        ],
+        "title": "SearchMode",
+        "type": "string"
       },
       "SourceType": {
         "enum": [
@@ -2448,6 +2513,60 @@
         ]
       }
     },
+    "/settings/ai-usage": {
+      "get": {
+        "operationId": "get_ai_usage_route_settings_ai_usage_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIUsageRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Ai Usage Route",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/thoughts": {
       "get": {
         "operationId": "list_thoughts_route_thoughts_get",
@@ -2668,6 +2787,15 @@
                 }
               ],
               "title": "Created To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search_mode",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SearchMode",
+              "default": "keyword"
             }
           },
           {

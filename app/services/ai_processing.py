@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from app.core.ai_quota import AIQuotaExceededError, reserve_ai_quota
 from app.core.config import settings
 from app.core.queue import enqueue_ai_processing, enqueue_deferred_ai_processing
 from app.core.rate_limit import enforce_rate_limit
@@ -201,6 +202,29 @@ def process_ai_job(
     try:
         enforce_rate_limit(thought.user_id, "ai_processing")
     except RequestNotStartedError as error:
+        delay = max(1, int(error.headers["Retry-After"]))
+        job.not_before = datetime.now(UTC) + timedelta(seconds=delay)
+        job.status = BackgroundJobStatus.PENDING.value
+        thought.ai_processing_status = AIProcessingStatus.PENDING.value
+        db.commit()
+        try:
+            enqueue_deferred_ai_processing(job.id, thought.id, job.not_before)
+        except Exception as queue_error:
+            job.not_before = datetime.now(UTC) + timedelta(
+                seconds=settings.ai_queue_retry_delay_seconds
+            )
+            job.error_message = type(queue_error).__name__
+            db.commit()
+        return
+
+    try:
+        reserve_ai_quota(
+            db,
+            thought.user_id,
+            "organization",
+            units=settings.ai_quota_organization_units,
+        )
+    except AIQuotaExceededError as error:
         delay = max(1, int(error.headers["Retry-After"]))
         job.not_before = datetime.now(UTC) + timedelta(seconds=delay)
         job.status = BackgroundJobStatus.PENDING.value

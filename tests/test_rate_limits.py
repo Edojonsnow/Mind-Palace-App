@@ -99,7 +99,7 @@ def test_semantic_limits_fall_back_to_text_and_browsing_does_not_consume_allowan
     monkeypatch.setattr("app.api.routes.thoughts.OpenAIProvider", provider)
     client.post("/thoughts", json={"body": "Tennis is fun"})
     client.post("/thoughts", json={"body": "Unrelated"})
-    result = client.get("/thoughts?q=tennis")
+    result = client.get("/thoughts?q=tennis&search_mode=semantic")
     assert result.status_code == 200
     assert result.headers["X-Search-Fallback"] == "rate-limit"
     assert [thought["body"] for thought in result.json()] == ["Tennis is fun"]
@@ -114,7 +114,7 @@ def test_search_remains_usable_when_redis_is_unavailable(client, monkeypatch):
         503, "Unavailable", headers={"Retry-After": "30"},
     ))
     monkeypatch.setattr("app.api.routes.thoughts.enforce_rate_limit", admission)
-    result = client.get("/thoughts?q=tennis")
+    result = client.get("/thoughts?q=tennis&search_mode=semantic")
     assert result.status_code == 200
     assert result.headers["X-Search-Fallback"] == "unavailable"
 
