@@ -1,0 +1,82 @@
+{
+  "scan_date": "2026-10-09",
+  "scope": "mind-palace-app FastAPI backend static security review",
+  "confirmed_critical_or_high": 0,
+  "findings": [
+    {
+      "id": "MP-SEC-001",
+      "severity": "medium",
+      "title": "Thought body and manual tag collections are unbounded",
+      "references": ["app/schemas/thought.py:12", "app/schemas/thought.py:22", "app/schemas/thought.py:30", "app/schemas/thought.py:42"],
+      "category": "API4 Unrestricted Resource Consumption"
+    },
+    {
+      "id": "MP-SEC-002",
+      "severity": "medium",
+      "title": "Authentication depends on network work on the request path",
+      "references": ["app/core/auth.py:36-45", "app/core/auth.py:109-119", "app/core/auth.py:166-180"],
+      "category": "API2 Broken Authentication / availability hardening"
+    },
+    {
+      "id": "MP-SEC-003",
+      "severity": "medium",
+      "title": "Internal auth-rate-limit endpoint is bearer-token protected but network reachable",
+      "references": ["app/api/routes/internal.py:12-34"],
+      "category": "API8 Security Misconfiguration"
+    },
+    {
+      "id": "MP-SEC-004",
+      "severity": "low_medium",
+      "title": "Unauthenticated database health probe can amplify load",
+      "references": ["app/api/routes/health.py:16-27"],
+      "category": "API4 Unrestricted Resource Consumption"
+    },
+    {
+      "id": "MP-SEC-005",
+      "severity": "low_medium",
+      "title": "Production security-header and CORS hardening is incomplete",
+      "references": ["app/main.py:24-40"],
+      "category": "API8 Security Misconfiguration"
+    },
+    {
+      "id": "MP-SEC-006",
+      "severity": "low_medium",
+      "title": "JWT audience validation is optional by configuration",
+      "references": ["app/core/config.py:17-20", "app/core/auth.py:38-45"],
+      "category": "API2 Broken Authentication"
+    },
+    {
+      "id": "MP-SEC-007",
+      "severity": "unrated",
+      "title": "Dependency vulnerability status is unverified",
+      "references": ["pyproject.toml:11-24"],
+      "category": "Supply-chain verification gap"
+    },
+    {
+      "id": "MP-SEC-008",
+      "severity": "low",
+      "title": "Container defaults need production hardening",
+      "references": ["Dockerfile:1-17", "compose.yaml:1-26"],
+      "category": "API8 Security Misconfiguration"
+    },
+    {
+      "id": "MP-SEC-009",
+      "severity": "low_medium",
+      "title": "General authenticated mutation rate limits are incomplete",
+      "references": ["app/api/routes/thoughts.py:31-42", "app/api/routes/thoughts.py:166-183", "app/api/routes/books.py:21-28", "app/core/rate_limit.py:57-69"],
+      "category": "API4 Unrestricted Resource Consumption"
+    }
+  ],
+  "static_controls": {
+    "user_ownership_predicates": "pass",
+    "explicit_request_fields": "pass",
+    "raw_user_controlled_sql_or_shell": "not_found",
+    "sensitive_logging": "not_found",
+    "unauthenticated_product_mutations": "not_found"
+  },
+  "verification_gaps": [
+    "Dynamic staging scan not run",
+    "pip-audit and safety unavailable locally",
+    "Render/Vercel edge configuration not verified"
+  ]
+}
