@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     neon_auth_issuer: str | None = None
     neon_auth_audience: str | None = None
     neon_auth_base_url: str | None = None
+    health_db_check_token: SecretStr | None = None
     backend_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     openai_api_key: str | None = None
     openai_embedding_model: str = "text-embedding-3-small"
@@ -80,13 +81,27 @@ class Settings(BaseSettings):
         return normalized or None
 
     @model_validator(mode="after")
-    def require_production_auth_audience(self) -> "Settings":
-        if (
-            self.app_env.strip().lower() in {"staging", "production"}
-            and not self.neon_auth_audience
-        ):
+    def require_production_security_configuration(self) -> "Settings":
+        if self.app_env.strip().lower() in {"staging", "production"}:
+            missing: list[str] = []
+            if not self.neon_auth_audience:
+                missing.append("NEON_AUTH_AUDIENCE")
+            if (
+                self.health_db_check_token is None
+                or not self.health_db_check_token.get_secret_value().strip()
+            ):
+                missing.append("HEALTH_DB_CHECK_TOKEN")
+            if not self.auth_rate_limits_enabled:
+                missing.append("AUTH_RATE_LIMITS_ENABLED=true")
+            if (
+                self.auth_rate_limit_token is None
+                or not self.auth_rate_limit_token.get_secret_value().strip()
+            ):
+                missing.append("AUTH_RATE_LIMIT_TOKEN")
+            if not missing:
+                return self
             raise ValueError(
-                "NEON_AUTH_AUDIENCE is required when APP_ENV is staging or production"
+                "Production security configuration is missing: " + ", ".join(missing)
             )
         return self
 

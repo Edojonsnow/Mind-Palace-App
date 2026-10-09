@@ -66,6 +66,11 @@ will refuse to start in those environments when it is missing.
 
 `NEON_AUTH_BASE_URL` is the Neon Auth API base URL (`https://<auth-host>/neondb/auth`). It is used to validate opaque session tokens when a JWT is not available. If omitted, the API derives it from `NEON_AUTH_JWKS_URL`.
 
+`/health` is the public liveness endpoint. In staging and production,
+`/health/db` requires the `X-Health-Check-Token` header matching
+`HEALTH_DB_CHECK_TOKEN`; keep this endpoint restricted to trusted monitoring or
+private networking. Render should use `/health` for ordinary liveness checks.
+
 For staging and production, enable the shared Redis limiter used by the web
 authentication proxy with the same private token configured in Vercel:
 
@@ -79,6 +84,10 @@ requires that token. It admits sign-up, sign-in, verification, and password
 reset requests before Neon Auth receives them. Keep the token out of browser
 environment variables and leave the feature disabled in local development
 unless the web proxy is also configured to call the local API.
+In staging and production, the API refuses to start unless this protection is
+enabled and the token is configured. Restrict the route at the deployment edge
+or through private networking where the platform supports it; the shared token
+remains required even when network restrictions are present.
 
 Permanent account deletion also requires a server-side Neon API key and the
 target project and branch identifiers:

@@ -4,6 +4,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from jwt.exceptions import InvalidTokenError, PyJWKClientError
+from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
 from app.core.auth import (
@@ -36,8 +37,26 @@ def test_protected_routes_require_bearer_token(db_session: Session) -> None:
 
 @pytest.mark.parametrize("app_env", ["staging", "production"])
 def test_staging_and_production_require_auth_audience(app_env: str) -> None:
-    with pytest.raises(ValueError, match="NEON_AUTH_AUDIENCE is required"):
+    with pytest.raises(ValueError, match="Production security configuration is missing"):
         Settings(app_env=app_env, neon_auth_audience=" ")
+
+
+@pytest.mark.parametrize("missing_setting", ["health", "internal"])
+def test_production_requires_operational_endpoint_protection(missing_setting: str) -> None:
+    values = {
+        "app_env": "production",
+        "neon_auth_audience": "mind-palace",
+        "health_db_check_token": SecretStr("health-secret"),
+        "auth_rate_limits_enabled": True,
+        "auth_rate_limit_token": SecretStr("auth-secret"),
+    }
+    if missing_setting == "health":
+        values["health_db_check_token"] = SecretStr(" ")
+    else:
+        values["auth_rate_limits_enabled"] = False
+
+    with pytest.raises(ValueError, match="Production security configuration is missing"):
+        Settings(**values)
 
 
 def test_local_auth_audience_can_remain_disabled() -> None:

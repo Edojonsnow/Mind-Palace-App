@@ -100,6 +100,19 @@ These are per-user work limits, not token budgets, daily spending quotas,
 global capacity controls, or login/signup abuse protection. Daily AI quotas are
 implemented separately below.
 
+## Operational Endpoint Restrictions
+
+`GET /health` is the public liveness endpoint and does not access the database.
+`GET /health/db` checks the database only after validating the
+`X-Health-Check-Token` header in staging and production. The token is compared
+with a constant-time comparison before opening a database connection.
+
+`POST /internal/auth-rate-limit` is excluded from OpenAPI and requires the
+private `AUTH_RATE_LIMIT_TOKEN`. Staging and production startup also require
+`AUTH_RATE_LIMITS_ENABLED=true` and a non-empty token. The deployment edge or
+private network should restrict this route further where supported; headers
+alone are not a substitute for the shared secret or network control.
+
 ## Daily AI Quotas
 
 The API keeps a durable UTC-day usage row per user in `ai_usage_daily`. It
