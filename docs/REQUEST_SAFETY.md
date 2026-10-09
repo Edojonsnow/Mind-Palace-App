@@ -54,6 +54,11 @@ request; rejected requests do not extend it. Defaults are configurable:
 | Organization retries | 10/minute | `RATE_LIMIT_ORGANIZE_PER_MINUTE` |
 | Export requests | 3/hour | `RATE_LIMIT_EXPORTS_PER_HOUR` |
 | Worker AI jobs | 20/minute | `RATE_LIMIT_AI_JOBS_PER_MINUTE` |
+| Thought writes | 60/minute | `RATE_LIMIT_THOUGHT_WRITES_PER_MINUTE` |
+| Book writes | 20/minute | `RATE_LIMIT_BOOK_WRITES_PER_MINUTE` |
+| Profile writes | 20/minute | `RATE_LIMIT_PROFILE_WRITES_PER_MINUTE` |
+| Settings writes | 20/minute | `RATE_LIMIT_SETTINGS_WRITES_PER_MINUTE` |
+| Account deletion actions | 5/hour | `RATE_LIMIT_ACCOUNT_DELETION_PER_HOUR` |
 
 `RATE_LIMITS_ENABLED=false` disables admission checks. Bucket keys contain only
 the work type and user ID, never queries, thought bodies, or IP addresses.
@@ -64,6 +69,13 @@ denial returns 429 with `Retry-After`; Redis admission outages return 503 with
 so an explicit retry with the same key can proceed later. Completed idempotent
 replays do not consume another allowance. Failed downstream work still consumes
 an admission; the limiter is not a billing ledger.
+
+Core authenticated writes use the same per-user Redis limiter but fail open when
+Redis is unavailable so saving, editing, deleting, and restoring thoughts remain
+available. Book, profile, and settings writes follow the same availability
+policy. Account deletion remains fail closed because it is a sensitive lifecycle
+operation. The bypass is logged by operation type and exception class without
+logging user content or credentials.
 
 Recall has two explicit modes. Keyword search is the default, uses ordinary
 case-insensitive text matching, and does not consume AI quota. Semantic search

@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     rate_limit_organize_per_minute: int = Field(default=10, ge=1)
     rate_limit_exports_per_hour: int = Field(default=3, ge=1)
     rate_limit_ai_jobs_per_minute: int = Field(default=20, ge=1)
+    rate_limit_thought_writes_per_minute: int = Field(default=60, ge=1)
+    rate_limit_book_writes_per_minute: int = Field(default=20, ge=1)
+    rate_limit_profile_writes_per_minute: int = Field(default=20, ge=1)
+    rate_limit_settings_writes_per_minute: int = Field(default=20, ge=1)
+    rate_limit_account_deletion_per_hour: int = Field(default=5, ge=1)
     auth_rate_limits_enabled: bool = False
     auth_rate_limit_token: SecretStr | None = None
     auth_rate_limit_sign_up_per_window: int = Field(default=5, ge=1)

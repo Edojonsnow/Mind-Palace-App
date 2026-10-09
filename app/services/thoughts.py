@@ -57,6 +57,7 @@ def create_thought(
             detail="Local-device thoughts are not accepted by the backend",
         )
 
+    enforce_rate_limit(user.id, "thought_write")
     settings = get_user_settings(db, user)
     use_with_ask = (
         settings.default_use_with_ask_my_mind
@@ -142,6 +143,7 @@ def get_thought(db: Session, user: User, thought_id: UUID) -> Thought:
 
 def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUpdate) -> Thought:
     thought = get_thought(db, user, thought_id)
+    enforce_rate_limit(user.id, "thought_write")
     was_ai_enabled = thought.use_with_ask_my_mind
     values = payload.model_dump(exclude_unset=True)
     next_thought_type = values.get("thought_type", thought.thought_type)
@@ -224,6 +226,7 @@ def retry_ai_processing(
 
 def soft_delete_thought(db: Session, user: User, thought_id: UUID) -> None:
     thought = get_thought(db, user, thought_id)
+    enforce_rate_limit(user.id, "thought_write")
     deleted_at = datetime.now(UTC)
     thought.deleted_at = deleted_at
     thought.purge_at = deleted_at + timedelta(days=settings.recovery_window_days)

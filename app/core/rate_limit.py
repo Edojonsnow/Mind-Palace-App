@@ -10,8 +10,20 @@ from app.core.queue import get_redis_connection
 from app.core.request_errors import RequestNotStartedError
 
 logger = logging.getLogger(__name__)
-Bucket = Literal["ask", "semantic_search", "organize", "export", "ai_processing"]
+Bucket = Literal[
+    "ask",
+    "semantic_search",
+    "organize",
+    "export",
+    "ai_processing",
+    "thought_write",
+    "book_write",
+    "profile_write",
+    "settings_write",
+    "account_deletion",
+]
 AuthRateLimitAction = Literal["sign_up", "sign_in", "verification", "password_reset"]
+RateLimitUnavailablePolicy = Literal["open", "closed"]
 
 # Atomic across API instances and workers; denials do not extend the window.
 ADMIT_SCRIPT = """
@@ -33,7 +45,14 @@ return {1, ttl}
 """
 
 
-def _enforce_keyed_rate_limit(key: str, limit: int, seconds: int, label: str) -> None:
+def _enforce_keyed_rate_limit(
+    key: str,
+    limit: int,
+    seconds: int,
+    label: str,
+    *,
+    unavailable_policy: RateLimitUnavailablePolicy = "closed",
+) -> None:
     try:
         allowed, ttl_ms = get_redis_connection().eval(
             ADMIT_SCRIPT, 1, key, limit, seconds * 1000,
@@ -42,6 +61,13 @@ def _enforce_keyed_rate_limit(key: str, limit: int, seconds: int, label: str) ->
         logger.warning(
             "Request admission unavailable: label=%s error_type=%s", label, type(error).__name__,
         )
+        if unavailable_policy == "open":
+            logger.warning(
+                "Request admission bypassed: label=%s error_type=%s",
+                label,
+                type(error).__name__,
+            )
+            return
         raise RequestNotStartedError(
             503, "Request limits are temporarily unavailable. Try again in 30 seconds.",
             headers={"Retry-After": "30"},
@@ -58,14 +84,60 @@ def enforce_rate_limit(user_id: UUID, bucket: Bucket) -> None:
     if not settings.rate_limits_enabled:
         return
     policies = {
-        "ask": (settings.rate_limit_ask_per_minute, 60, "Questions"),
-        "semantic_search": (settings.rate_limit_search_per_minute, 60, "AI searches"),
-        "organize": (settings.rate_limit_organize_per_minute, 60, "Organization retries"),
-        "export": (settings.rate_limit_exports_per_hour, 3600, "Exports"),
-        "ai_processing": (settings.rate_limit_ai_jobs_per_minute, 60, "AI processing"),
+        "ask": (settings.rate_limit_ask_per_minute, 60, "Questions", "closed"),
+        "semantic_search": (
+            settings.rate_limit_search_per_minute,
+            60,
+            "AI searches",
+            "closed",
+        ),
+        "organize": (
+            settings.rate_limit_organize_per_minute,
+            60,
+            "Organization retries",
+            "closed",
+        ),
+        "export": (settings.rate_limit_exports_per_hour, 3600, "Exports", "closed"),
+        "ai_processing": (settings.rate_limit_ai_jobs_per_minute, 60, "AI processing", "closed"),
+        "thought_write": (
+            settings.rate_limit_thought_writes_per_minute,
+            60,
+            "Thought writes",
+            "open",
+        ),
+        "book_write": (
+            settings.rate_limit_book_writes_per_minute,
+            60,
+            "Book writes",
+            "open",
+        ),
+        "profile_write": (
+            settings.rate_limit_profile_writes_per_minute,
+            60,
+            "Profile writes",
+            "open",
+        ),
+        "settings_write": (
+            settings.rate_limit_settings_writes_per_minute,
+            60,
+            "Settings writes",
+            "open",
+        ),
+        "account_deletion": (
+            settings.rate_limit_account_deletion_per_hour,
+            3600,
+            "Account deletion",
+            "closed",
+        ),
     }
-    limit, seconds, label = policies[bucket]
-    _enforce_keyed_rate_limit(f"mind-palace:rate:{bucket}:{user_id}", limit, seconds, label)
+    limit, seconds, label, unavailable_policy = policies[bucket]
+    _enforce_keyed_rate_limit(
+        f"mind-palace:rate:{bucket}:{user_id}",
+        limit,
+        seconds,
+        label,
+        unavailable_policy=unavailable_policy,
+    )
 
 
 def enforce_auth_rate_limit(client_key: str, action: AuthRateLimitAction) -> None:

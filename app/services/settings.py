@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import enforce_rate_limit
 from app.models import User, UserSettings
 from app.schemas import UserSettingsUpdate
 
@@ -21,6 +22,7 @@ def update_user_settings(
     user: User,
     payload: UserSettingsUpdate,
 ) -> UserSettings:
+    enforce_rate_limit(user.id, "settings_write")
     settings = get_user_settings(db, user)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(settings, key, value)

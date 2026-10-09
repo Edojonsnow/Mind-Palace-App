@@ -7,6 +7,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.rate_limit import enforce_rate_limit
 from app.models import (
     AccountDeletionRequest,
     AccountDeletionStatus,
@@ -40,6 +41,7 @@ def create_account_deletion_request(db: Session, user: User) -> AccountDeletionR
     if existing is not None:
         return existing
 
+    enforce_rate_limit(user.id, "account_deletion")
     db.execute(
         delete(AccountDeletionRequest).where(AccountDeletionRequest.user_id == user.id)
     )
@@ -96,6 +98,7 @@ def cancel_account_deletion(db: Session, user: User) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No pending account deletion request",
         )
+    enforce_rate_limit(user.id, "account_deletion")
     request.status = AccountDeletionStatus.CANCELLED.value
     request.completed_at = datetime.now(UTC)
     db.commit()

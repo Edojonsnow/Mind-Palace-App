@@ -1,10 +1,12 @@
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import enforce_rate_limit
 from app.models import AIPreferences, User
 from app.schemas.profile import AIPreferencesUpdate, ProfileUpdate
 
 
 def update_profile(db: Session, user: User, payload: ProfileUpdate) -> User:
+    enforce_rate_limit(user.id, "profile_write")
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(user, key, value)
     db.flush()
@@ -20,6 +22,7 @@ def update_ai_preferences(
     user: User,
     payload: AIPreferencesUpdate,
 ) -> AIPreferences:
+    enforce_rate_limit(user.id, "profile_write")
     preferences = db.get(AIPreferences, user.id)
     if preferences is None:
         preferences = AIPreferences(user_id=user.id)

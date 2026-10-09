@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import enforce_rate_limit
 from app.models import (
     BackgroundJob,
     BackgroundJobStatus,
@@ -56,6 +57,7 @@ def restore_thought(db: Session, user: User, thought_id: UUID) -> Thought:
     if thought is None or thought.purge_at is None or as_utc(thought.purge_at) <= utc_now():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thought not found")
 
+    enforce_rate_limit(user.id, "thought_write")
     thought.deleted_at = None
     thought.purge_at = None
     db.execute(

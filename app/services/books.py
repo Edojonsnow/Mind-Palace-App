@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import enforce_rate_limit
 from app.models import Book, User
 from app.schemas import BookCreate, BookRead
 
@@ -34,6 +35,7 @@ def get_or_create_book(db: Session, user: User, payload: BookCreate) -> Book:
     if book is not None:
         return book
 
+    enforce_rate_limit(user.id, "book_write")
     book = Book(
         user_id=user.id,
         title=title,

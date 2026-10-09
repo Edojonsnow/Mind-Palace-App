@@ -44,6 +44,44 @@ def test_redis_outage_fails_closed_for_expensive_requests(monkeypatch):
     assert denied.value.headers["Retry-After"] == "30"
 
 
+def test_core_mutation_buckets_fail_open_when_redis_is_unavailable(monkeypatch):
+    monkeypatch.setattr(settings, "rate_limits_enabled", True)
+    connection = Mock()
+    connection.eval.side_effect = ConnectionError("Redis unavailable")
+    monkeypatch.setattr("app.core.rate_limit.get_redis_connection", lambda: connection)
+
+    for bucket in ("thought_write", "book_write", "profile_write", "settings_write"):
+        enforce_rate_limit(uuid4(), bucket)
+
+
+def test_account_deletion_rate_limit_fails_closed_when_redis_is_unavailable(monkeypatch):
+    monkeypatch.setattr(settings, "rate_limits_enabled", True)
+    connection = Mock()
+    connection.eval.side_effect = ConnectionError("Redis unavailable")
+    monkeypatch.setattr("app.core.rate_limit.get_redis_connection", lambda: connection)
+
+    with pytest.raises(RequestNotStartedError) as denied:
+        enforce_rate_limit(uuid4(), "account_deletion")
+
+    assert denied.value.status_code == 503
+
+
+def test_thought_write_bucket_uses_a_separate_user_limit(monkeypatch):
+    monkeypatch.setattr(settings, "rate_limits_enabled", True)
+    connection = Mock()
+    connection.eval.side_effect = [[1, 60_000], [0, 12_001]]
+    monkeypatch.setattr("app.core.rate_limit.get_redis_connection", lambda: connection)
+    user_id = uuid4()
+
+    enforce_rate_limit(user_id, "thought_write")
+    with pytest.raises(RequestNotStartedError):
+        enforce_rate_limit(user_id, "thought_write")
+
+    first = connection.eval.call_args_list[0]
+    assert first.args[2] == f"mind-palace:rate:thought_write:{user_id}"
+    assert first.args[3:] == (60, 60_000)
+
+
 def test_disabled_limiter_does_not_connect(monkeypatch):
     connect = Mock(side_effect=AssertionError("No Redis in disabled mode"))
     monkeypatch.setattr("app.core.rate_limit.get_redis_connection", connect)
@@ -202,7 +240,11 @@ def test_ai_opt_out_bypasses_limits_and_cancels_deferred_work(client, db_session
     job = db_session.scalar(select(BackgroundJob))
     job.not_before = datetime.now(UTC) + timedelta(minutes=1)
     db_session.commit()
-    admission = Mock(side_effect=denied)
+    def deny_organization_only(*args):
+        if args[1] == "organize":
+            denied()
+
+    admission = Mock(side_effect=deny_organization_only)
     monkeypatch.setattr("app.services.thoughts.enforce_rate_limit", admission)
     assert client.post(f"/thoughts/{thought['id']}/organize").status_code == 429
     response = client.patch(
@@ -210,7 +252,10 @@ def test_ai_opt_out_bypasses_limits_and_cancels_deferred_work(client, db_session
     )
     assert response.status_code == 200
     assert job.status == "cancelled"
-    admission.assert_called_once()
+    assert [call.args[1] for call in admission.call_args_list] == [
+        "organize",
+        "thought_write",
+    ]
 
 
 def test_failed_deferred_enqueue_keeps_original_thought(client, db_session, monkeypatch):
