@@ -30,7 +30,7 @@ def test_create_thought_defaults_ai_participation_off(client: TestClient) -> Non
     assert "ai_metadata" not in body
 
 
-def test_manual_tags_are_trimmed_and_deduplicated_without_a_count_limit(
+def test_manual_tags_are_trimmed_and_deduplicated(
     client: TestClient,
 ) -> None:
     response = client.post(
@@ -40,6 +40,32 @@ def test_manual_tags_are_trimmed_and_deduplicated_without_a_count_limit(
 
     assert response.status_code == 201
     assert response.json()["manual_tags"] == ["work", "ideas"]
+
+
+def test_create_thought_rejects_more_than_five_manual_tags(client: TestClient) -> None:
+    response = client.post(
+        "/thoughts",
+        json={
+            "body": "A thought with too many labels.",
+            "manual_tags": [f"tag-{i}" for i in range(6)],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_thought_body_is_limited_to_one_thousand_characters(client: TestClient) -> None:
+    response = client.post("/thoughts", json={"body": "x" * 1001})
+
+    assert response.status_code == 422
+
+
+def test_thought_update_body_is_limited_to_one_thousand_characters(client: TestClient) -> None:
+    thought = client.post("/thoughts", json={"body": "A short thought."}).json()
+
+    response = client.patch(f"/thoughts/{thought['id']}", json={"body": "x" * 1001})
+
+    assert response.status_code == 422
 
 
 def test_thought_response_keeps_generated_metadata_private(

@@ -1,15 +1,20 @@
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, StringConstraints
 
 from app.models.thought import AIProcessingStatus, SourceType, StorageScope, ThoughtType
+
+ThoughtManualTag = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
+]
 
 
 class ThoughtCreate(BaseModel):
     title: str | None = Field(default=None, max_length=255)
-    body: str = Field(min_length=1)
+    body: str = Field(min_length=1, max_length=1000)
     thought_type: ThoughtType = ThoughtType.THOUGHT
     source_type: SourceType = SourceType.MANUAL
     source_title: str | None = Field(default=None, max_length=255)
@@ -19,7 +24,7 @@ class ThoughtCreate(BaseModel):
     book_title: str | None = Field(default=None, max_length=255)
     book_author: str | None = Field(default=None, max_length=255)
     page_reference: str | None = Field(default=None, max_length=100)
-    manual_tags: list[str] = Field(default_factory=list)
+    manual_tags: list[ThoughtManualTag] = Field(default_factory=list, max_length=5)
     storage_scope: StorageScope = StorageScope.CLOUD
     use_with_ask_my_mind: bool | None = None
     is_archived: bool = False
@@ -27,7 +32,7 @@ class ThoughtCreate(BaseModel):
 
 class ThoughtUpdate(BaseModel):
     title: str | None = Field(default=None, max_length=255)
-    body: str | None = Field(default=None, min_length=1)
+    body: str | None = Field(default=None, min_length=1, max_length=1000)
     thought_type: ThoughtType | None = None
     source_type: SourceType | None = None
     source_title: str | None = Field(default=None, max_length=255)
@@ -37,7 +42,7 @@ class ThoughtUpdate(BaseModel):
     book_title: str | None = Field(default=None, max_length=255)
     book_author: str | None = Field(default=None, max_length=255)
     page_reference: str | None = Field(default=None, max_length=100)
-    manual_tags: list[str] | None = None
+    manual_tags: list[ThoughtManualTag] | None = Field(default=None, max_length=5)
     use_with_ask_my_mind: bool | None = None
     is_archived: bool | None = None
 
