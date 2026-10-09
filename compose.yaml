@@ -12,6 +12,13 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     depends_on:
       - redis
 
@@ -23,5 +30,12 @@ services:
       REDIS_URL: redis://redis:6379/0
     command: ["python", "-m", "app.workers.run"]
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     depends_on:
       - redis

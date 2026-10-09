@@ -128,6 +128,12 @@ The API and worker use `redis://redis:6379/0` inside Compose. When running the
 API directly on the host, use the local default `redis://localhost:6379/0` and
 start Redis separately.
 
+The API and worker containers run as a non-root user with a read-only root
+filesystem, no added Linux capabilities, and `no-new-privileges`. The image
+also includes a Docker healthcheck against the public `/health` liveness route.
+The Compose Redis service is for local development only; production must use a
+managed/private Redis deployment with authentication and TLS.
+
 The RQ worker also runs a database-backed AI job reconciler every 30 seconds by
 default. It repairs AI jobs that were committed before Redis dispatch, reclaims
 stale worker jobs, and retries temporary queue failures. Configure the interval,
@@ -165,8 +171,20 @@ python scripts/check_neon_connection.py
 Check DB health while the API is running:
 
 ```bash
-curl http://127.0.0.1:8000/health/db
+curl http://127.0.0.1:8000/health
 ```
+
+For the protected database readiness check, provide the configured secret
+without printing it in shell history or logs:
+
+```bash
+curl -H "X-Health-Check-Token: $HEALTH_DB_CHECK_TOKEN" http://127.0.0.1:8000/health/db
+```
+
+Runtime dependencies are constrained in `requirements.lock`. Review and
+regenerate that file as part of an intentional dependency upgrade. The
+repository's dependency audit workflow runs `pip-audit` against the same file
+on pull requests, pushes to `main`, and a weekly schedule.
 
 ## MVP Defaults
 
