@@ -59,7 +59,10 @@ NEON_AUTH_ISSUER=https://<auth-host>
 NEON_AUTH_JWKS_URL=https://<auth-host>/neondb/auth/.well-known/jwks.json
 ```
 
-`NEON_AUTH_AUDIENCE` is optional. Keep it blank unless the Neon Auth token is issued with a specific audience claim.
+`NEON_AUTH_AUDIENCE` may remain blank for local/development environments when
+audience validation is intentionally disabled. It is required in staging and
+production and must exactly match the `aud` claim issued by Neon Auth. The API
+will refuse to start in those environments when it is missing.
 
 `NEON_AUTH_BASE_URL` is the Neon Auth API base URL (`https://<auth-host>/neondb/auth`). It is used to validate opaque session tokens when a JWT is not available. If omitted, the API derives it from `NEON_AUTH_JWKS_URL`.
 

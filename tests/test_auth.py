@@ -12,6 +12,7 @@ from app.core.auth import (
     verify_access_token,
     verify_session_token,
 )
+from app.core.config import Settings
 from app.db.session import get_db
 from app.main import create_app
 
@@ -31,6 +32,18 @@ def test_protected_routes_require_bearer_token(db_session: Session) -> None:
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Authentication required"
+
+
+@pytest.mark.parametrize("app_env", ["staging", "production"])
+def test_staging_and_production_require_auth_audience(app_env: str) -> None:
+    with pytest.raises(ValueError, match="NEON_AUTH_AUDIENCE is required"):
+        Settings(app_env=app_env, neon_auth_audience=" ")
+
+
+def test_local_auth_audience_can_remain_disabled() -> None:
+    app_settings = Settings(app_env="local", neon_auth_audience=" ")
+
+    assert app_settings.neon_auth_audience is None
 
 
 def test_verify_access_token_requires_auth_configuration() -> None:

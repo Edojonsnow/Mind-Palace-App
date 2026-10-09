@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.database_url import normalize_database_url
@@ -70,6 +70,25 @@ class Settings(BaseSettings):
     ai_quota_search_units: int = Field(default=1, ge=1)
     ai_quota_organization_units: int = Field(default=2, ge=1)
     ai_max_thought_chars: int = Field(default=50000, ge=1000)
+
+    @field_validator("neon_auth_audience", mode="before")
+    @classmethod
+    def normalize_auth_audience(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+    @model_validator(mode="after")
+    def require_production_auth_audience(self) -> "Settings":
+        if (
+            self.app_env.strip().lower() in {"staging", "production"}
+            and not self.neon_auth_audience
+        ):
+            raise ValueError(
+                "NEON_AUTH_AUDIENCE is required when APP_ENV is staging or production"
+            )
+        return self
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
