@@ -8,6 +8,7 @@ WORKDIR /app
 COPY pyproject.toml README.md requirements.lock ./
 COPY app ./app
 COPY migrations ./migrations
+COPY scripts ./scripts
 COPY alembic.ini ./
 
 RUN python -m pip install --no-cache-dir --disable-pip-version-check \

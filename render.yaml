@@ -7,10 +7,13 @@ services:
   - type: web
     name: mind-palace-api-staging
     runtime: docker
+    plan: free
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
-    preDeployCommand: python -m alembic upgrade head
+    # Free Render web services do not support pre-deploy commands. The startup
+    # supervisor runs migrations, the API, and the RQ worker together.
+    dockerCommand: python scripts/run_free_staging.py
     envVars:
       - key: APP_NAME
         value: Mind Palace App
@@ -31,53 +34,6 @@ services:
       - key: HEALTH_DB_CHECK_TOKEN
         sync: false
       - key: BACKEND_CORS_ORIGINS
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: NEON_API_KEY
-        sync: false
-      - key: NEON_PROJECT_ID
-        sync: false
-      - key: NEON_AUTH_BRANCH_ID
-        sync: false
-      - key: RATE_LIMITS_ENABLED
-        value: "true"
-      - key: AUTH_RATE_LIMITS_ENABLED
-        value: "true"
-      - key: AUTH_RATE_LIMIT_TOKEN
-        sync: false
-      - key: AI_QUOTAS_ENABLED
-        value: "true"
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: mind-palace-redis-staging
-          property: connectionString
-
-  - type: worker
-    name: mind-palace-worker-staging
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    dockerCommand: python -m app.workers.run
-    envVars:
-      - key: APP_NAME
-        value: Mind Palace App
-      - key: APP_ENV
-        value: staging
-      - key: APP_VERSION
-        value: 0.1.0
-      - key: DATABASE_URL
-        sync: false
-      - key: NEON_AUTH_JWKS_URL
-        sync: false
-      - key: NEON_AUTH_ISSUER
-        sync: false
-      - key: NEON_AUTH_AUDIENCE
-        sync: false
-      - key: NEON_AUTH_BASE_URL
-        sync: false
-      - key: HEALTH_DB_CHECK_TOKEN
         sync: false
       - key: OPENAI_API_KEY
         sync: false
