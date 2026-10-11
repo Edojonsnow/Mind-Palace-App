@@ -103,7 +103,9 @@ Keep `NEON_API_KEY` in the real environment only; never commit it or expose it
 to the web client. The account deletion worker uses these values to delete the
 Neon Auth identity after the 60-day recovery window.
 
-See [Database Environments](docs/DATABASE_ENVIRONMENTS.md) for development, staging, and production setup.
+See [Database Environments](docs/DATABASE_ENVIRONMENTS.md) for development,
+staging, and production database setup. See [Staging Deployment](docs/STAGING_DEPLOYMENT.md)
+for the Render, Neon, and Vercel staging runbook.
 
 Run the API:
 
