@@ -513,6 +513,85 @@
         "title": "ChatMessageRead",
         "type": "object"
       },
+      "CollectionCreate": {
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CollectionCreate",
+        "type": "object"
+      },
+      "CollectionRead": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_accessed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Accessed At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "thought_count": {
+            "title": "Thought Count",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "thought_count",
+          "last_accessed_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CollectionRead",
+        "type": "object"
+      },
+      "CollectionUpdate": {
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CollectionUpdate",
+        "type": "object"
+      },
       "ExportRequestRead": {
         "properties": {
           "completed_at": {
@@ -759,6 +838,7 @@
       "ThoughtCreate": {
         "properties": {
           "body": {
+            "maxLength": 1000,
             "minLength": 1,
             "title": "Body",
             "type": "string"
@@ -806,6 +886,8 @@
           },
           "manual_tags": {
             "items": {
+              "maxLength": 100,
+              "minLength": 1,
               "type": "string"
             },
             "title": "Manual Tags",
@@ -1112,6 +1194,7 @@
           "body": {
             "anyOf": [
               {
+                "maxLength": 1000,
                 "minLength": 1,
                 "type": "string"
               },
@@ -1172,6 +1255,8 @@
             "anyOf": [
               {
                 "items": {
+                  "maxLength": 100,
+                  "minLength": 1,
                   "type": "string"
                 },
                 "type": "array"
@@ -1862,6 +1947,563 @@
         ]
       }
     },
+    "/collections": {
+      "get": {
+        "operationId": "list_collections_route_collections_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "recent",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Recent",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CollectionRead"
+                  },
+                  "title": "Response List Collections Route Collections Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Collections Route",
+        "tags": [
+          "collections"
+        ]
+      },
+      "post": {
+        "operationId": "create_collection_route_collections_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Collection Route",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/collections/{collection_id}": {
+      "delete": {
+        "operationId": "delete_collection_route_collections__collection_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Collection Route",
+        "tags": [
+          "collections"
+        ]
+      },
+      "get": {
+        "operationId": "get_collection_route_collections__collection_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Collection Route",
+        "tags": [
+          "collections"
+        ]
+      },
+      "patch": {
+        "operationId": "update_collection_route_collections__collection_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Collection Route",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/collections/{collection_id}/thoughts": {
+      "get": {
+        "operationId": "list_collection_thoughts_route_collections__collection_id__thoughts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ThoughtRead"
+                  },
+                  "title": "Response List Collection Thoughts Route Collections  Collection Id  Thoughts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Collection Thoughts Route",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
+    "/collections/{collection_id}/thoughts/{thought_id}": {
+      "delete": {
+        "operationId": "remove_thought_from_collection_route_collections__collection_id__thoughts__thought_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "thought_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Thought Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Thought From Collection Route",
+        "tags": [
+          "collections"
+        ]
+      },
+      "post": {
+        "operationId": "add_thought_to_collection_route_collections__collection_id__thoughts__thought_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Collection Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "thought_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Thought Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Thought To Collection Route",
+        "tags": [
+          "collections"
+        ]
+      }
+    },
     "/exports": {
       "post": {
         "operationId": "create_export_route_exports_post",
@@ -2089,6 +2731,24 @@
     "/health/db": {
       "get": {
         "operationId": "database_health_check_health_db_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Health-Check-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Health-Check-Token"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2103,6 +2763,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Database Health Check",
@@ -2635,6 +3305,23 @@
                 }
               ],
               "title": "Book Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "collection_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Collection Id"
             }
           },
           {
