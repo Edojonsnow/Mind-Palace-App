@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.rate_limit import enforce_rate_limit
 from app.models import (
@@ -36,7 +36,7 @@ def list_deleted_thoughts(db: Session, user: User) -> list[Thought]:
     now = utc_now()
     return list(
         db.scalars(
-            select(Thought)
+            select(Thought).options(selectinload(Thought.collections))
             .where(
                 Thought.user_id == user.id,
                 Thought.deleted_at.is_not(None),

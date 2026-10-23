@@ -18,6 +18,7 @@ from app.models.idempotency import IdempotencyRequest
 from app.schemas import BookCreate, ThoughtCreate, ThoughtUpdate
 from app.services.ai_processing import purge_ai_artifacts, schedule_ai_processing
 from app.services.books import get_book, get_or_create_book
+from app.services.collections import sync_thought_collections
 from app.services.data_lifecycle import schedule_thought_purge
 from app.services.idempotency import complete_operation
 from app.services.settings import get_user_settings
@@ -118,6 +119,7 @@ def create_thought(
     )
     db.add(thought)
     db.flush()
+    sync_thought_collections(db, user, thought, payload.collection_ids)
     complete_operation(operation, "thought", thought.id)
     if thought.use_with_ask_my_mind:
         schedule_ai_processing(db, thought)
@@ -129,7 +131,7 @@ def create_thought(
 def get_thought(db: Session, user: User, thought_id: UUID) -> Thought:
     thought = db.scalar(
         select(Thought)
-        .options(selectinload(Thought.metadata_record))
+        .options(selectinload(Thought.metadata_record), selectinload(Thought.collections))
         .where(
             Thought.id == thought_id,
             Thought.user_id == user.id,
@@ -146,6 +148,7 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
     enforce_rate_limit(user.id, "thought_write")
     was_ai_enabled = thought.use_with_ask_my_mind
     values = payload.model_dump(exclude_unset=True)
+    collection_ids = values.pop("collection_ids", None)
     next_thought_type = values.get("thought_type", thought.thought_type)
     if (
         next_thought_type == ThoughtType.BOOK_EXCERPT.value
@@ -186,6 +189,9 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
         elif key == "manual_tags" and value is not None:
             value = normalize_manual_tags(value)
         setattr(thought, key, value)
+
+    if collection_ids is not None:
+        sync_thought_collections(db, user, thought, collection_ids)
 
     if thought.use_with_ask_my_mind:
         validate_ai_thought_size(thought.body)

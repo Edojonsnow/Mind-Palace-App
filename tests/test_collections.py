@@ -56,6 +56,28 @@ def test_collection_membership_is_many_to_many_and_deletion_preserves_thoughts(
     assert client.get(f"/thoughts/{second['id']}").status_code == 200
 
 
+def test_thought_create_and_update_can_replace_collection_memberships(client: TestClient) -> None:
+    first = client.post("/collections", json={"name": "First"}).json()
+    second = client.post("/collections", json={"name": "Second"}).json()
+
+    thought = client.post(
+        "/thoughts",
+        json={"body": "A thought in a collection.", "collection_ids": [first["id"]]},
+    ).json()
+    assert thought["collection_ids"] == [first["id"]]
+
+    updated = client.patch(
+        f"/thoughts/{thought['id']}",
+        json={"collection_ids": [second["id"]]},
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["collection_ids"] == [second["id"]]
+    assert client.get(f"/collections/{first['id']}/thoughts").json() == []
+    second_thoughts = client.get(f"/collections/{second['id']}/thoughts").json()
+    assert [item["id"] for item in second_thoughts] == [thought["id"]]
+
+
 def test_deleted_thoughts_do_not_count_in_collections(client: TestClient) -> None:
     collection = client.post("/collections", json={"name": "Archive"}).json()
     thought = client.post("/thoughts", json={"body": "A thought to archive."}).json()

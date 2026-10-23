@@ -233,7 +233,7 @@ def list_thoughts(
     )
     statement = (
         select(Thought)
-        .options(selectinload(Thought.metadata_record))
+        .options(selectinload(Thought.metadata_record), selectinload(Thought.collections))
         .outerjoin(ThoughtMetadata, metadata_join)
         .where(*filters)
     )

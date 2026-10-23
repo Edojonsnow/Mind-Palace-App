@@ -213,6 +213,36 @@ def add_thought_to_collection(
     return get_collection(db, user, collection.id)
 
 
+def sync_thought_collections(
+    db: Session,
+    user: User,
+    thought: Thought,
+    collection_ids: list[UUID],
+) -> None:
+    requested_ids = list(dict.fromkeys(collection_ids))
+    if requested_ids:
+        selected = db.scalars(
+            select(Collection).where(
+                Collection.user_id == user.id,
+                Collection.id.in_(requested_ids),
+            )
+        ).all()
+        if len(selected) != len(requested_ids):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Collection not found",
+            )
+    else:
+        selected = []
+
+    if requested_ids or thought.collections:
+        enforce_rate_limit(user.id, "collection_write")
+    thought.collections = selected
+    now = datetime.now(UTC)
+    for collection in selected:
+        collection.last_accessed_at = now
+
+
 def remove_thought_from_collection(
     db: Session,
     user: User,
@@ -241,7 +271,7 @@ def list_collection_thoughts(
     db.commit()
     thoughts = db.scalars(
         select(Thought)
-        .options(selectinload(Thought.metadata_record))
+        .options(selectinload(Thought.metadata_record), selectinload(Thought.collections))
         .join(
             collection_thoughts,
             collection_thoughts.c.thought_id == Thought.id,

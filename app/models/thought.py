@@ -95,3 +95,7 @@ class Thought(Base):
     @property
     def ai_metadata(self):
         return self.metadata_record
+
+    @property
+    def collection_ids(self) -> list[UUID]:
+        return [collection.id for collection in self.collections]

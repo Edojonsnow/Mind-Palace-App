@@ -879,6 +879,14 @@
             ],
             "title": "Book Title"
           },
+          "collection_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Collection Ids",
+            "type": "array"
+          },
           "is_archived": {
             "default": false,
             "title": "Is Archived",
@@ -1028,6 +1036,14 @@
             ],
             "title": "Book Title"
           },
+          "collection_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Collection Ids",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1167,6 +1183,7 @@
           "book_author",
           "page_reference",
           "manual_tags",
+          "collection_ids",
           "storage_scope",
           "use_with_ask_my_mind",
           "ai_processing_status",
@@ -1239,6 +1256,21 @@
               }
             ],
             "title": "Book Title"
+          },
+          "collection_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Ids"
           },
           "is_archived": {
             "anyOf": [

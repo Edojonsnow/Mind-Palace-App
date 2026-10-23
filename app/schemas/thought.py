@@ -25,6 +25,7 @@ class ThoughtCreate(BaseModel):
     book_author: str | None = Field(default=None, max_length=255)
     page_reference: str | None = Field(default=None, max_length=100)
     manual_tags: list[ThoughtManualTag] = Field(default_factory=list)
+    collection_ids: list[UUID] = Field(default_factory=list)
     storage_scope: StorageScope = StorageScope.CLOUD
     use_with_ask_my_mind: bool | None = None
     is_archived: bool = False
@@ -43,6 +44,7 @@ class ThoughtUpdate(BaseModel):
     book_author: str | None = Field(default=None, max_length=255)
     page_reference: str | None = Field(default=None, max_length=100)
     manual_tags: list[ThoughtManualTag] | None = Field(default=None)
+    collection_ids: list[UUID] | None = Field(default=None)
     use_with_ask_my_mind: bool | None = None
     is_archived: bool | None = None
 
@@ -82,6 +84,7 @@ class ThoughtRead(BaseModel):
     book_author: str | None
     page_reference: str | None
     manual_tags: list[str]
+    collection_ids: list[UUID]
     storage_scope: StorageScope
     use_with_ask_my_mind: bool
     ai_processing_status: AIProcessingStatus
