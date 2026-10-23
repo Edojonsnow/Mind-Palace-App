@@ -3,7 +3,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.ai_quota import AIQuotaExceededError, reserve_ai_quota
@@ -42,13 +42,50 @@ def _set_job_failed(db: Session, job_id: UUID, thought_id: UUID, error: Exceptio
 
     job.status = BackgroundJobStatus.FAILED.value
     job.error_message = type(error).__name__
+    job.started_at = None
     job.completed_at = datetime.now(UTC)
     if thought is not None and thought.use_with_ask_my_mind:
         thought.ai_processing_status = AIProcessingStatus.FAILED.value
     db.commit()
 
 
-def schedule_ai_processing(db: Session, thought: Thought) -> BackgroundJob:
+def _cancel_active_ai_jobs(db: Session, thought: Thought) -> None:
+    active_jobs = db.scalars(
+        select(BackgroundJob).where(
+            BackgroundJob.thought_id == thought.id,
+            BackgroundJob.job_type == BackgroundJobType.CHUNK_THOUGHT.value,
+            BackgroundJob.status.in_(
+                [BackgroundJobStatus.PENDING.value, BackgroundJobStatus.RUNNING.value]
+            ),
+        )
+    ).all()
+    now = datetime.now(UTC)
+    for job in active_jobs:
+        job.status = BackgroundJobStatus.CANCELLED.value
+        job.started_at = None
+        job.not_before = None
+        job.completed_at = now
+
+
+def _dispatch_ai_job(db: Session, job: BackgroundJob, thought: Thought) -> None:
+    try:
+        enqueue_ai_processing(job.id, thought.id)
+    except Exception as error:
+        logger.warning("Unable to enqueue AI processing job: %s", type(error).__name__)
+        job.not_before = datetime.now(UTC) + timedelta(
+            seconds=settings.ai_queue_retry_delay_seconds
+        )
+        job.error_message = type(error).__name__
+        db.commit()
+
+
+def schedule_ai_processing(
+    db: Session,
+    thought: Thought,
+    *,
+    dispatch_existing: bool = False,
+) -> BackgroundJob:
+    source_hash = enrichment_source_hash(thought)
     active_job = db.scalar(
         select(BackgroundJob)
         .where(
@@ -61,7 +98,14 @@ def schedule_ai_processing(db: Session, thought: Thought) -> BackgroundJob:
         .order_by(BackgroundJob.created_at.desc())
     )
     if active_job is not None:
-        return active_job
+        if active_job.source_hash == source_hash:
+            if dispatch_existing and active_job.status == BackgroundJobStatus.PENDING.value:
+                active_job.not_before = None
+                active_job.error_message = None
+                db.commit()
+                _dispatch_ai_job(db, active_job, thought)
+            return active_job
+        _cancel_active_ai_jobs(db, thought)
 
     job = BackgroundJob(
         user_id=thought.user_id,
@@ -69,26 +113,47 @@ def schedule_ai_processing(db: Session, thought: Thought) -> BackgroundJob:
         job_type=BackgroundJobType.CHUNK_THOUGHT.value,
         status=BackgroundJobStatus.PENDING.value,
         attempt_count=0,
+        quota_reserved=False,
         enrichment_schema_version=AI_ENRICHMENT_SCHEMA_VERSION,
         embedding_model=settings.openai_embedding_model,
         metadata_model=settings.openai_metadata_model,
-        source_hash=enrichment_source_hash(thought),
+        source_hash=source_hash,
     )
     thought.ai_processing_status = AIProcessingStatus.PENDING.value
     db.add(job)
     db.commit()
     db.refresh(job)
 
-    try:
-        enqueue_ai_processing(job.id, thought.id)
-    except Exception as error:
-        logger.warning("Unable to enqueue AI processing job: %s", type(error).__name__)
-        job.not_before = datetime.now(UTC) + timedelta(
-            seconds=settings.ai_queue_retry_delay_seconds
-        )
-        job.error_message = type(error).__name__
-        db.commit()
+    _dispatch_ai_job(db, job, thought)
 
+    db.refresh(job)
+    return job
+
+
+def requeue_failed_ai_job(db: Session, thought: Thought) -> BackgroundJob | None:
+    """Reuse a failed job for the same source so its quota reservation is retained."""
+    source_hash = enrichment_source_hash(thought)
+    job = db.scalar(
+        select(BackgroundJob)
+        .where(
+            BackgroundJob.thought_id == thought.id,
+            BackgroundJob.job_type == BackgroundJobType.CHUNK_THOUGHT.value,
+            BackgroundJob.status == BackgroundJobStatus.FAILED.value,
+            BackgroundJob.source_hash == source_hash,
+        )
+        .order_by(BackgroundJob.created_at.desc())
+    )
+    if job is None:
+        return None
+
+    job.status = BackgroundJobStatus.PENDING.value
+    job.error_message = None
+    job.started_at = None
+    job.not_before = None
+    job.completed_at = None
+    thought.ai_processing_status = AIProcessingStatus.PENDING.value
+    db.commit()
+    _dispatch_ai_job(db, job, thought)
     db.refresh(job)
     return job
 
@@ -96,19 +161,7 @@ def schedule_ai_processing(db: Session, thought: Thought) -> BackgroundJob:
 def purge_ai_artifacts(db: Session, thought: Thought, *, commit: bool = True) -> None:
     db.execute(delete(ThoughtChunk).where(ThoughtChunk.thought_id == thought.id))
     db.execute(delete(ThoughtMetadata).where(ThoughtMetadata.thought_id == thought.id))
-    db.execute(
-        update(BackgroundJob)
-        .where(
-            BackgroundJob.thought_id == thought.id,
-            BackgroundJob.status.in_(
-                [BackgroundJobStatus.PENDING.value, BackgroundJobStatus.RUNNING.value]
-            ),
-        )
-        .values(
-            status=BackgroundJobStatus.CANCELLED.value,
-            completed_at=datetime.now(UTC),
-        )
-    )
+    _cancel_active_ai_jobs(db, thought)
     thought.ai_processing_status = AIProcessingStatus.NOT_REQUESTED.value
     if commit:
         db.commit()
@@ -217,28 +270,30 @@ def process_ai_job(
             db.commit()
         return
 
-    try:
-        reserve_ai_quota(
-            db,
-            thought.user_id,
-            "organization",
-            units=settings.ai_quota_organization_units,
-        )
-    except AIQuotaExceededError as error:
-        delay = max(1, int(error.headers["Retry-After"]))
-        job.not_before = datetime.now(UTC) + timedelta(seconds=delay)
-        job.status = BackgroundJobStatus.PENDING.value
-        thought.ai_processing_status = AIProcessingStatus.PENDING.value
-        db.commit()
+    if not job.quota_reserved:
         try:
-            enqueue_deferred_ai_processing(job.id, thought.id, job.not_before)
-        except Exception as queue_error:
-            job.not_before = datetime.now(UTC) + timedelta(
-                seconds=settings.ai_queue_retry_delay_seconds
+            reserve_ai_quota(
+                db,
+                thought.user_id,
+                "organization",
+                units=settings.ai_quota_organization_units,
             )
-            job.error_message = type(queue_error).__name__
+        except AIQuotaExceededError as error:
+            delay = max(1, int(error.headers["Retry-After"]))
+            job.not_before = datetime.now(UTC) + timedelta(seconds=delay)
+            job.status = BackgroundJobStatus.PENDING.value
+            thought.ai_processing_status = AIProcessingStatus.PENDING.value
             db.commit()
-        return
+            try:
+                enqueue_deferred_ai_processing(job.id, thought.id, job.not_before)
+            except Exception as queue_error:
+                job.not_before = datetime.now(UTC) + timedelta(
+                    seconds=settings.ai_queue_retry_delay_seconds
+                )
+                job.error_message = type(queue_error).__name__
+                db.commit()
+            return
+        job.quota_reserved = True
 
     job.not_before = None
     job.status = BackgroundJobStatus.RUNNING.value

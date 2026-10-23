@@ -16,15 +16,21 @@ from app.models import (
 )
 from app.models.idempotency import IdempotencyRequest
 from app.schemas import BookCreate, ThoughtCreate, ThoughtUpdate
-from app.services.ai_processing import purge_ai_artifacts, schedule_ai_processing
+from app.services.ai_processing import (
+    purge_ai_artifacts,
+    requeue_failed_ai_job,
+    schedule_ai_processing,
+)
+from app.services.ai_processing_content import deterministic_metadata
 from app.services.books import get_book, get_or_create_book
 from app.services.collections import sync_thought_collections
 from app.services.data_lifecycle import schedule_thought_purge
 from app.services.idempotency import complete_operation
 from app.services.settings import get_user_settings
 
-DETERMINISTIC_METADATA_FIELDS = {
-    "thought_type",
+AI_REPROCESS_FIELDS = {
+    "title",
+    "body",
     "source_type",
     "source_title",
     "source_author",
@@ -32,7 +38,6 @@ DETERMINISTIC_METADATA_FIELDS = {
     "book_title",
     "book_author",
     "page_reference",
-    "manual_tags",
 }
 
 
@@ -198,16 +203,15 @@ def update_thought(db: Session, user: User, thought_id: UUID, payload: ThoughtUp
 
     db.flush()
 
+    ai_content_changed = bool(AI_REPROCESS_FIELDS.intersection(values))
+    manual_tags_changed = "manual_tags" in values
+
     if not thought.use_with_ask_my_mind and was_ai_enabled:
         purge_ai_artifacts(db, thought)
-    elif thought.use_with_ask_my_mind and (
-        not was_ai_enabled
-        or bool(DETERMINISTIC_METADATA_FIELDS.intersection(values))
-        or "body" in values
-        or thought.ai_processing_status == "failed"
-    ):
-        purge_ai_artifacts(db, thought)
+    elif thought.use_with_ask_my_mind and (not was_ai_enabled or ai_content_changed):
         schedule_ai_processing(db, thought)
+    elif thought.use_with_ask_my_mind and manual_tags_changed and thought.metadata_record:
+        thought.metadata_record.deterministic_metadata = deterministic_metadata(thought)
     return thought
 
 
@@ -224,8 +228,8 @@ def retry_ai_processing(
 
     enforce_rate_limit(user.id, "organize")
     complete_operation(operation, "thought", thought.id)
-    purge_ai_artifacts(db, thought, commit=False)
-    schedule_ai_processing(db, thought)
+    if requeue_failed_ai_job(db, thought) is None:
+        schedule_ai_processing(db, thought, dispatch_existing=True)
     db.refresh(thought)
     return thought
 

@@ -98,7 +98,6 @@ def semantic_text(thought: Thought) -> str:
     add_section("Book", thought.book_title)
     add_section("Book author", thought.book_author)
     add_section("Page", thought.page_reference)
-    add_section("Tags", thought.manual_tags)
     return "\n".join(sections)
 
 

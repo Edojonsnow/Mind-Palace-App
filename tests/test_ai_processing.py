@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, settings
 from app.models import (
     AIProcessingStatus,
+    AIUsageDaily,
     BackgroundJob,
     BackgroundJobStatus,
     Thought,
@@ -65,7 +66,7 @@ def test_semantic_text_includes_capture_context() -> None:
     assert "Title: A useful title" in enriched
     assert "Thought: The body of the thought." in enriched
     assert "Book: A book" in enriched
-    assert "Tags: focus, reading" in enriched
+    assert "Tags: focus, reading" not in enriched
 
 
 def test_openai_provider_adapts_embeddings_and_structured_metadata() -> None:
@@ -487,7 +488,7 @@ def test_worker_discards_results_for_changed_source_content(
     assert db_session.scalars(select(ThoughtMetadata)).all() == []
 
 
-def test_editing_organization_fields_purges_stale_artifacts_and_reschedules(
+def test_editing_manual_tags_updates_metadata_without_reembedding(
     client: TestClient,
     db_session: Session,
     monkeypatch,
@@ -512,9 +513,50 @@ def test_editing_organization_fields_purges_stale_artifacts_and_reschedules(
     )
 
     assert update_response.status_code == 200
+    assert update_response.json()["ai_processing_status"] == AIProcessingStatus.READY.value
+    assert len(db_session.scalars(select(ThoughtChunk)).all()) == 1
+    assert len(db_session.scalars(select(ThoughtMetadata)).all()) == 1
+    assert len(db_session.scalars(select(BackgroundJob)).all()) == 1
+
+    metadata = db_session.scalar(select(ThoughtMetadata))
+    assert metadata is not None
+    assert metadata.deterministic_metadata["manual_tags"] == ["edited"]
+
+
+def test_editing_content_keeps_previous_artifacts_until_replacement_succeeds(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", no_op_enqueue)
+    response = client.post(
+        "/thoughts",
+        json={
+            "body": "The original thought before an edit.",
+            "use_with_ask_my_mind": True,
+        },
+    )
+    thought_id = UUID(response.json()["id"])
+    first_job = db_session.scalar(select(BackgroundJob))
+    assert first_job is not None
+    process_ai_job(db_session, first_job.id, thought_id, provider_factory=lambda: FakeAIProvider())
+    old_chunk = db_session.scalar(select(ThoughtChunk))
+    old_metadata = db_session.scalar(select(ThoughtMetadata))
+    assert old_chunk is not None
+    assert old_metadata is not None
+    old_chunk_id = old_chunk.id
+    old_metadata_id = old_metadata.id
+
+    update_response = client.patch(
+        f"/thoughts/{thought_id}",
+        json={"body": "The replacement thought after an edit."},
+    )
+
+    assert update_response.status_code == 200
     assert update_response.json()["ai_processing_status"] == AIProcessingStatus.PENDING.value
-    assert db_session.scalars(select(ThoughtChunk)).all() == []
-    assert db_session.scalars(select(ThoughtMetadata)).all() == []
+    assert db_session.get(ThoughtChunk, old_chunk_id) is not None
+    assert db_session.get(ThoughtMetadata, old_metadata_id) is not None
+    assert first_job.status == BackgroundJobStatus.COMPLETED.value
 
     pending_job = db_session.scalar(
         select(BackgroundJob).where(BackgroundJob.status == BackgroundJobStatus.PENDING.value)
@@ -527,9 +569,77 @@ def test_editing_organization_fields_purges_stale_artifacts_and_reschedules(
         provider_factory=lambda: FakeAIProvider(),
     )
 
-    metadata = db_session.scalar(select(ThoughtMetadata))
-    assert metadata is not None
-    assert metadata.deterministic_metadata["manual_tags"] == ["edited"]
+    replacement_chunk = db_session.scalar(select(ThoughtChunk))
+    replacement_metadata = db_session.scalar(select(ThoughtMetadata))
+    assert replacement_chunk is not None
+    assert replacement_metadata is not None
+    assert replacement_chunk.id != old_chunk_id
+    assert replacement_metadata.id != old_metadata_id
+    assert replacement_chunk.source_hash == replacement_metadata.source_hash
+
+
+def test_duplicate_content_edit_reuses_pending_job(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", no_op_enqueue)
+    response = client.post(
+        "/thoughts",
+        json={"body": "Original body.", "use_with_ask_my_mind": True},
+    )
+    thought_id = UUID(response.json()["id"])
+
+    first_update = client.patch(f"/thoughts/{thought_id}", json={"body": "Edited body."})
+    assert first_update.status_code == 200
+    second_job = db_session.scalar(
+        select(BackgroundJob).where(BackgroundJob.status == BackgroundJobStatus.PENDING.value)
+    )
+    assert second_job is not None
+
+    second_update = client.patch(f"/thoughts/{thought_id}", json={"body": "Edited body."})
+
+    assert second_update.status_code == 200
+    assert len(db_session.scalars(select(BackgroundJob)).all()) == 2
+    assert db_session.get(BackgroundJob, second_job.id).status == BackgroundJobStatus.PENDING.value
+
+
+def test_failed_retry_reuses_reserved_quota(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.services.ai_processing.enqueue_ai_processing", no_op_enqueue)
+    response = client.post(
+        "/thoughts",
+        json={"body": "Retry this after a provider failure.", "use_with_ask_my_mind": True},
+    )
+    thought_id = UUID(response.json()["id"])
+    job = db_session.scalar(select(BackgroundJob))
+    assert job is not None
+
+    def failing_provider():
+        raise RuntimeError("provider unavailable")
+
+    process_ai_job(db_session, job.id, thought_id, provider_factory=failing_provider)
+    usage = db_session.scalar(select(AIUsageDaily))
+    assert usage is not None
+    assert usage.organization_count == 1
+    assert job.quota_reserved is True
+
+    retry = client.post(f"/thoughts/{thought_id}/organize")
+
+    assert retry.status_code == 200
+    assert retry.json()["ai_processing_status"] == AIProcessingStatus.PENDING.value
+    assert db_session.scalar(select(BackgroundJob)).id == job.id
+    assert db_session.scalar(select(BackgroundJob)).status == BackgroundJobStatus.PENDING.value
+
+    process_ai_job(db_session, job.id, thought_id, provider_factory=lambda: FakeAIProvider())
+    db_session.expire_all()
+    usage = db_session.scalar(select(AIUsageDaily))
+    assert usage is not None
+    assert usage.organization_count == 1
+    assert usage.units_used == settings.ai_quota_organization_units
 
 
 def test_disabling_ai_purges_derived_artifacts(

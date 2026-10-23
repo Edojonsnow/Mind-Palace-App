@@ -4,7 +4,17 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, TypeDecorator, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    TypeDecorator,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -105,6 +115,7 @@ class BackgroundJob(Base):
     job_type: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(32), default=BackgroundJobStatus.PENDING.value)
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    quota_reserved: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     error_message: Mapped[str | None] = mapped_column(String(255))
     enrichment_schema_version: Mapped[int | None] = mapped_column(Integer)
     embedding_model: Mapped[str | None] = mapped_column(String(128))
