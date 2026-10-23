@@ -24,6 +24,12 @@ def test_user_can_create_and_list_collections(client: TestClient) -> None:
     assert [item["name"] for item in response.json()] == ["Career ideas", "Reading list"]
 
 
+def test_collection_names_cannot_be_blank(client: TestClient) -> None:
+    response = client.post("/collections", json={"name": "   "})
+
+    assert response.status_code == 422
+
+
 def test_collection_membership_is_many_to_many_and_deletion_preserves_thoughts(
     client: TestClient,
 ) -> None:
