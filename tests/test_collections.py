@@ -30,6 +30,26 @@ def test_collection_names_cannot_be_blank(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_recent_collections_are_limited_and_reordered_after_access(client: TestClient) -> None:
+    created = [
+        client.post("/collections", json={"name": f"Recent {index}"}).json()
+        for index in range(6)
+    ]
+
+    recent_response = client.get("/collections", params={"recent": "true", "limit": 5})
+
+    assert recent_response.status_code == 200
+    recent = recent_response.json()
+    assert len(recent) == 5
+    assert {item["id"] for item in recent} <= {item["id"] for item in created}
+
+    accessed_collection = client.get(f"/collections/{created[0]['id']}")
+
+    assert accessed_collection.status_code == 200
+    reordered = client.get("/collections", params={"recent": "true", "limit": 5}).json()
+    assert reordered[0]["id"] == created[0]["id"]
+
+
 def test_collection_membership_is_many_to_many_and_deletion_preserves_thoughts(
     client: TestClient,
 ) -> None:
