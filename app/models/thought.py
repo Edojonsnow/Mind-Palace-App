@@ -80,6 +80,11 @@ class Thought(Base):
     user = relationship("User", back_populates="thoughts")
     book = relationship("Book", back_populates="thoughts")
     chunks = relationship("ThoughtChunk", back_populates="thought", cascade="all, delete-orphan")
+    collections = relationship(
+        "Collection",
+        secondary="collection_thoughts",
+        back_populates="thoughts",
+    )
     metadata_record = relationship(
         "ThoughtMetadata",
         back_populates="thought",

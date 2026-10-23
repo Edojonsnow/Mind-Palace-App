@@ -18,6 +18,7 @@ Bucket = Literal[
     "ai_processing",
     "thought_write",
     "book_write",
+    "collection_write",
     "profile_write",
     "settings_write",
     "account_deletion",
@@ -109,6 +110,12 @@ def enforce_rate_limit(user_id: UUID, bucket: Bucket) -> None:
             settings.rate_limit_book_writes_per_minute,
             60,
             "Book writes",
+            "open",
+        ),
+        "collection_write": (
+            settings.rate_limit_collection_writes_per_minute,
+            60,
+            "Collection writes",
             "open",
         ),
         "profile_write": (

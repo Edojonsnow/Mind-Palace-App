@@ -28,4 +28,5 @@ class User(Base):
 
     thoughts = relationship("Thought", back_populates="user")
     books = relationship("Book", back_populates="user", cascade="all, delete-orphan")
+    collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")
     settings = relationship("UserSettings", back_populates="user", uselist=False)

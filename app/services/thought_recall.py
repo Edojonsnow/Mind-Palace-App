@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import (
     AIProcessingStatus,
+    Collection,
     SourceType,
     Thought,
     ThoughtChunk,
@@ -33,6 +34,7 @@ class RecallQuery:
     thought_type: ThoughtType | None = None
     source_type: SourceType | None = None
     book_id: UUID | None = None
+    collection_id: UUID | None = None
     tag: str | None = None
     book: str | None = None
     theme: str | None = None
@@ -77,6 +79,15 @@ def _thought_filters(user: User, recall_query: RecallQuery, *, include_query: bo
         filters.append(Thought.source_type == recall_query.source_type.value)
     if recall_query.book_id is not None:
         filters.append(Thought.book_id == recall_query.book_id)
+    if recall_query.collection_id is not None:
+        filters.append(
+            Thought.collections.any(
+                and_(
+                    Collection.id == recall_query.collection_id,
+                    Collection.user_id == user.id,
+                )
+            )
+        )
     if recall_query.tag and recall_query.tag.strip():
         tag_json_value = recall_query.tag.strip().replace("\\", "\\\\").replace('"', '\\"')
         filters.append(

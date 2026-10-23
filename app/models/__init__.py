@@ -11,6 +11,7 @@ from app.models.ai_preferences import AIPreferences
 from app.models.ai_usage import AIUsageDaily
 from app.models.book import Book
 from app.models.chat import ChatConversation, ChatMessage, ChatMessageRole
+from app.models.collection import Collection
 from app.models.idempotency import IdempotencyRequest
 from app.models.lifecycle import (
     AccountDeletionRequest,
@@ -32,6 +33,7 @@ __all__ = [
     "ChatConversation",
     "ChatMessage",
     "ChatMessageRole",
+    "Collection",
     "AccountDeletionRequest",
     "AccountDeletionStatus",
     "BackgroundJob",

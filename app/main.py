@@ -5,6 +5,7 @@ from app.api.routes import (
     account,
     ask,
     books,
+    collections,
     exports,
     health,
     internal,
@@ -44,6 +45,7 @@ def create_app() -> FastAPI:
     app.include_router(profile.router)
     app.include_router(ask.router)
     app.include_router(books.router)
+    app.include_router(collections.router)
     app.include_router(account.router)
     app.include_router(exports.router)
     app.include_router(remember.router)

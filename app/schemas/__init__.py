@@ -9,6 +9,7 @@ from app.schemas.ask import (
     ChatMessageRead,
 )
 from app.schemas.book import BookCreate, BookRead
+from app.schemas.collection import CollectionCreate, CollectionRead, CollectionUpdate
 from app.schemas.lifecycle import AccountDeletionRequestRead, ExportRequestRead
 from app.schemas.recall import SearchMode
 from app.schemas.security import AuthRateLimitRequest
@@ -22,6 +23,9 @@ __all__ = [
     "AIUsageRead",
     "BookCreate",
     "BookRead",
+    "CollectionCreate",
+    "CollectionRead",
+    "CollectionUpdate",
     "AccountDeletionRequestRead",
     "AuthRateLimitRequest",
     "ChatConversationRead",

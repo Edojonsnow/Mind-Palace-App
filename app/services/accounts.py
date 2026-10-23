@@ -17,6 +17,7 @@ from app.models import (
     Book,
     ChatConversation,
     ChatMessage,
+    Collection,
     ExportRequest,
     IdempotencyRequest,
     Thought,
@@ -25,6 +26,7 @@ from app.models import (
     User,
     UserSettings,
 )
+from app.models.collection import collection_thoughts
 from app.services.data_lifecycle import as_utc
 from app.services.neon_auth_admin import delete_neon_auth_user
 
@@ -116,8 +118,16 @@ def purge_user_data(db: Session, user: User) -> None:
     db.execute(delete(BackgroundJob).where(BackgroundJob.user_id == user.id))
     db.execute(delete(AccountDeletionRequest).where(AccountDeletionRequest.user_id == user.id))
     db.execute(delete(UserSettings).where(UserSettings.user_id == user.id))
+    db.execute(
+        delete(collection_thoughts).where(
+            collection_thoughts.c.collection_id.in_(
+                select(Collection.id).where(Collection.user_id == user.id)
+            )
+        )
+    )
     db.execute(delete(Thought).where(Thought.user_id == user.id))
     db.execute(delete(Book).where(Book.user_id == user.id))
+    db.execute(delete(Collection).where(Collection.user_id == user.id))
     db.delete(user)
     db.commit()
 

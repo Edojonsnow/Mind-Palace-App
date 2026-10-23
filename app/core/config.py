@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     rate_limit_ai_jobs_per_minute: int = Field(default=20, ge=1)
     rate_limit_thought_writes_per_minute: int = Field(default=60, ge=1)
     rate_limit_book_writes_per_minute: int = Field(default=20, ge=1)
+    rate_limit_collection_writes_per_minute: int = Field(default=20, ge=1)
     rate_limit_profile_writes_per_minute: int = Field(default=20, ge=1)
     rate_limit_settings_writes_per_minute: int = Field(default=20, ge=1)
     rate_limit_account_deletion_per_hour: int = Field(default=5, ge=1)

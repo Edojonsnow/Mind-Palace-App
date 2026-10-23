@@ -17,6 +17,7 @@ from app.models import (
     ThoughtMetadata,
     User,
 )
+from app.models.collection import collection_thoughts
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +135,9 @@ def permanently_purge_thought(
     _scrub_thought_citations(db, thought, chunk_ids)
     db.execute(delete(ThoughtChunk).where(ThoughtChunk.thought_id == thought.id))
     db.execute(delete(ThoughtMetadata).where(ThoughtMetadata.thought_id == thought.id))
+    db.execute(
+        delete(collection_thoughts).where(collection_thoughts.c.thought_id == thought.id)
+    )
     job_filters = [BackgroundJob.thought_id == thought.id]
     if keep_job_id is not None:
         job_filters.append(BackgroundJob.id != keep_job_id)

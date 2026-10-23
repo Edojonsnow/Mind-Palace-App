@@ -7,6 +7,7 @@ from app.models import (
     AIPreferences,
     ChatConversation,
     ChatMessage,
+    Collection,
     Thought,
     ThoughtMetadata,
     User,
@@ -51,6 +52,13 @@ def build_export_payload(db: Session, user: User) -> dict[str, object]:
     thoughts = list(
         db.scalars(select(Thought).where(Thought.user_id == user.id).order_by(Thought.created_at))
     )
+    collections = list(
+        db.scalars(
+            select(Collection)
+            .where(Collection.user_id == user.id)
+            .order_by(Collection.created_at)
+        )
+    )
     metadata = list(
         db.scalars(
             select(ThoughtMetadata)
@@ -74,7 +82,7 @@ def build_export_payload(db: Session, user: User) -> dict[str, object]:
     )
 
     return {
-        "format_version": 2,
+        "format_version": 3,
         "exported_at": datetime.now(UTC).isoformat(),
         "user": {
             "email": user.email,
@@ -99,6 +107,17 @@ def build_export_payload(db: Session, user: User) -> dict[str, object]:
             else None
         ),
         "thoughts": [_thought_payload(thought) for thought in thoughts],
+        "collections": [
+            {
+                "id": str(collection.id),
+                "name": collection.name,
+                "last_accessed_at": _iso(collection.last_accessed_at),
+                "created_at": _iso(collection.created_at),
+                "updated_at": _iso(collection.updated_at),
+                "thought_ids": [str(thought.id) for thought in collection.thoughts],
+            }
+            for collection in collections
+        ],
         "thought_metadata": [
             {
                 "thought_id": str(record.thought_id),
