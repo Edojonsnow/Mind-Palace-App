@@ -42,7 +42,7 @@ def test_manual_tags_are_trimmed_and_deduplicated(
     assert response.json()["manual_tags"] == ["work", "ideas"]
 
 
-def test_create_thought_rejects_more_than_five_manual_tags(client: TestClient) -> None:
+def test_create_thought_accepts_more_than_five_manual_tags(client: TestClient) -> None:
     response = client.post(
         "/thoughts",
         json={
@@ -51,7 +51,8 @@ def test_create_thought_rejects_more_than_five_manual_tags(client: TestClient) -
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 201
+    assert response.json()["manual_tags"] == [f"tag-{i}" for i in range(6)]
 
 
 def test_thought_body_is_limited_to_one_thousand_characters(client: TestClient) -> None:
