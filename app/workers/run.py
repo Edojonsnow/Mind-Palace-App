@@ -9,7 +9,7 @@ from app.workers.reconcile import run_reconciliation_loop
 
 def main() -> None:
     connection = get_redis_connection()
-    worker = Worker([get_ai_queue()], connection=connection)
+    worker = Worker([get_ai_queue()], connection=connection, log_job_description=False)
     stop_event = Event()
     reconciler = Thread(
         target=run_reconciliation_loop,

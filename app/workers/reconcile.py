@@ -2,6 +2,7 @@ import logging
 from threading import Event
 
 from app.core.config import settings
+from app.core.diagnostics import emit_event
 from app.db.session import SessionLocal
 from app.services.accounts import reconcile_account_deletions
 from app.services.ai_recovery import reconcile_ai_jobs
@@ -42,6 +43,6 @@ def run_reconciliation_loop(stop_event: Event) -> None:
     while not stop_event.is_set():
         try:
             reconcile_once()
-        except Exception:
-            logger.exception("AI job reconciliation failed")
+        except Exception as error:
+            emit_event("worker.reconciliation_failed", error_type=type(error).__name__)
         stop_event.wait(settings.ai_reconciliation_interval_seconds)

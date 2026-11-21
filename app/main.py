@@ -15,6 +15,7 @@ from app.api.routes import (
 )
 from app.api.routes import settings as settings_routes
 from app.core.config import settings
+from app.core.diagnostics import RequestDiagnosticsMiddleware
 
 
 def create_app() -> FastAPI:
@@ -22,6 +23,7 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
     )
+    app.add_middleware(RequestDiagnosticsMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -38,6 +40,7 @@ def create_app() -> FastAPI:
             "X-Search-Fallback",
             "X-Search-Mode",
             "X-AI-Quota",
+            "X-Request-ID",
         ],
     )
     app.include_router(health.router)

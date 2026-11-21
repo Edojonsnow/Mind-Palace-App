@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.ai_quota import AIQuotaExceededError, reserve_ai_quota
 from app.core.config import settings
+from app.core.diagnostics import emit_event
 from app.core.queue import enqueue_ai_processing, enqueue_deferred_ai_processing
 from app.core.rate_limit import enforce_rate_limit
 from app.core.request_errors import RequestNotStartedError
@@ -48,6 +49,8 @@ def _set_job_failed(db: Session, job_id: UUID, thought_id: UUID, error: Exceptio
         thought.ai_processing_status = AIProcessingStatus.FAILED.value
     db.commit()
 
+    emit_event("ai.failed", job_id=str(job_id), error_type=type(error).__name__)
+
 
 def _cancel_active_ai_jobs(db: Session, thought: Thought) -> None:
     active_jobs = db.scalars(
@@ -70,7 +73,9 @@ def _cancel_active_ai_jobs(db: Session, thought: Thought) -> None:
 def _dispatch_ai_job(db: Session, job: BackgroundJob, thought: Thought) -> None:
     try:
         enqueue_ai_processing(job.id, thought.id)
+        emit_event("ai.dispatched", job_id=str(job.id))
     except Exception as error:
+        emit_event("ai.dispatch_failed", job_id=str(job.id), error_type=type(error).__name__)
         logger.warning("Unable to enqueue AI processing job: %s", type(error).__name__)
         job.not_before = datetime.now(UTC) + timedelta(
             seconds=settings.ai_queue_retry_delay_seconds
@@ -358,6 +363,7 @@ def process_ai_job(
         job.error_message = None
         job.completed_at = processed_at
         db.commit()
+        emit_event("ai.ready", job_id=str(job.id))
     except Exception as error:
         db.rollback()
         _set_job_failed(db, job_id, thought_id, error)

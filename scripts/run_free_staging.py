@@ -34,6 +34,7 @@ def main() -> int:
             sys.executable,
             "-m",
             "uvicorn",
+            "--no-access-log",
             "app.main:app",
             "--host",
             "0.0.0.0",
