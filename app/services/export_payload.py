@@ -102,6 +102,8 @@ def build_export_payload(db: Session, user: User) -> dict[str, object]:
                 "default_use_with_ask_my_mind": settings_record.default_use_with_ask_my_mind,
                 "store_chat_history": settings_record.store_chat_history,
                 "mobile_offline_cache_enabled": settings_record.mobile_offline_cache_enabled,
+                "onboarding_step": settings_record.onboarding_step,
+                "onboarding_completed_at": _iso(settings_record.onboarding_completed_at),
             }
             if settings_record is not None
             else None

@@ -661,6 +661,24 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "OnboardingUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "continue",
+              "skip"
+            ],
+            "title": "Action",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "OnboardingUpdate",
+        "type": "object"
+      },
       "ProfileRead": {
         "properties": {
           "avatar_url": {
@@ -1416,6 +1434,26 @@
             "title": "Mobile Offline Cache Enabled",
             "type": "boolean"
           },
+          "onboarding_completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Onboarding Completed At"
+          },
+          "onboarding_step": {
+            "enum": [
+              "privacy",
+              "first_thought"
+            ],
+            "title": "Onboarding Step",
+            "type": "string"
+          },
           "store_chat_history": {
             "title": "Store Chat History",
             "type": "boolean"
@@ -1437,6 +1475,8 @@
           "default_use_with_ask_my_mind",
           "store_chat_history",
           "mobile_offline_cache_enabled",
+          "onboarding_step",
+          "onboarding_completed_at",
           "created_at",
           "updated_at"
         ],
@@ -3264,6 +3304,70 @@
           }
         ],
         "summary": "Get Ai Usage Route",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/onboarding": {
+      "patch": {
+        "operationId": "update_onboarding_route_settings_onboarding_patch",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserSettingsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Onboarding Route",
         "tags": [
           "settings"
         ]

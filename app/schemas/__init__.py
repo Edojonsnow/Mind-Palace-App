@@ -13,7 +13,7 @@ from app.schemas.collection import CollectionCreate, CollectionRead, CollectionU
 from app.schemas.lifecycle import AccountDeletionRequestRead, ExportRequestRead
 from app.schemas.recall import SearchMode
 from app.schemas.security import AuthRateLimitRequest
-from app.schemas.settings import UserSettingsRead, UserSettingsUpdate
+from app.schemas.settings import OnboardingUpdate, UserSettingsRead, UserSettingsUpdate
 from app.schemas.thought import ThoughtCreate, ThoughtMetadataRead, ThoughtRead, ThoughtUpdate
 
 __all__ = [
@@ -32,6 +32,7 @@ __all__ = [
     "ChatMessageRead",
     "ExportRequestRead",
     "SearchMode",
+    "OnboardingUpdate",
     "ThoughtCreate",
     "ThoughtMetadataRead",
     "ThoughtRead",

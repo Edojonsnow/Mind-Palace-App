@@ -26,7 +26,7 @@ from app.services.books import get_book, get_or_create_book
 from app.services.collections import sync_thought_collections
 from app.services.data_lifecycle import schedule_thought_purge
 from app.services.idempotency import complete_operation
-from app.services.settings import get_user_settings
+from app.services.settings import complete_onboarding, get_user_settings
 
 AI_REPROCESS_FIELDS = {
     "title",
@@ -125,6 +125,7 @@ def create_thought(
     db.add(thought)
     db.flush()
     sync_thought_collections(db, user, thought, payload.collection_ids)
+    complete_onboarding(db, user.id)
     complete_operation(operation, "thought", thought.id)
     if thought.use_with_ask_my_mind:
         schedule_ai_processing(db, thought)

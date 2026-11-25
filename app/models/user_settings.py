@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -15,6 +15,10 @@ class UserSettings(Base):
     default_use_with_ask_my_mind: Mapped[bool] = mapped_column(Boolean, default=False)
     store_chat_history: Mapped[bool] = mapped_column(Boolean, default=True)
     mobile_offline_cache_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    onboarding_step: Mapped[str] = mapped_column(
+        String(32), default="privacy", server_default="privacy",
+    )
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
