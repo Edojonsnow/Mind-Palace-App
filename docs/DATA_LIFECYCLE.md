@@ -50,6 +50,12 @@ does not purge local data while the Auth identity cannot be deleted.
 The account purge job retries transient failures through RQ and the worker
 reconciliation loop requeues due requests whose scheduled job was lost.
 
+Users may also explicitly skip recovery with `POST /account/deletion/permanent`.
+It requires typed confirmation and a recently validated provider session. A
+minimal hashed identity revocation record prevents old JWTs from recreating
+purged accounts. See [Account deletion](ACCOUNT_DELETION.md) for the complete
+configuration, failure and retention contract.
+
 ## Privacy Checks
 
 Lifecycle jobs log only error types and status information. They must not log

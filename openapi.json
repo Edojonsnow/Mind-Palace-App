@@ -184,6 +184,24 @@
         "title": "AIUsageRead",
         "type": "object"
       },
+      "AccountDeletionOptions": {
+        "properties": {
+          "permanent_deletion_available": {
+            "title": "Permanent Deletion Available",
+            "type": "boolean"
+          },
+          "recovery_window_days": {
+            "title": "Recovery Window Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "recovery_window_days",
+          "permanent_deletion_available"
+        ],
+        "title": "AccountDeletionOptions",
+        "type": "object"
+      },
       "AccountDeletionRequestRead": {
         "properties": {
           "completed_at": {
@@ -677,6 +695,21 @@
           "action"
         ],
         "title": "OnboardingUpdate",
+        "type": "object"
+      },
+      "PermanentAccountDeletion": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmation": {
+            "const": "DELETE MY ACCOUNT",
+            "title": "Confirmation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation"
+        ],
+        "title": "PermanentAccountDeletion",
         "type": "object"
       },
       "ProfileRead": {
@@ -1730,6 +1763,117 @@
           }
         ],
         "summary": "Request Account Deletion Route",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/account/deletion/options": {
+      "get": {
+        "operationId": "account_deletion_options_route_account_deletion_options_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Account Deletion Options Route",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/account/deletion/permanent": {
+      "post": {
+        "operationId": "permanently_delete_account_route_account_deletion_permanent_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Neon-Auth-Session-Cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Neon-Auth-Session-Cookie"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PermanentAccountDeletion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Permanently Delete Account Route",
         "tags": [
           "account"
         ]

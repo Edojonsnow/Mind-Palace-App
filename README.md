@@ -127,8 +127,23 @@ docker compose up --build
 ```
 
 The API and worker use `redis://redis:6379/0` inside Compose. When running the
-API directly on the host, use the local default `redis://localhost:6379/0` and
-start Redis separately.
+API directly on the host, keep `REDIS_URL=redis://localhost:6379/0` and start
+only its Redis dependency:
+
+```bash
+docker compose up -d redis
+```
+
+Redis is published on `127.0.0.1:6379` only, not on the public network. Avoid
+running both a host API and the Compose API on port 8000; choose one setup.
+Rebuild the API and worker images after code changes before using the full
+Compose setup. Starting an old image does not load the current checkout.
+
+Account-deletion requests fail closed if Redis is unavailable. Immediate
+permanent deletion also requires the development branch's `NEON_API_KEY`,
+`NEON_PROJECT_ID`, and `NEON_AUTH_BRANCH_ID` in the backend `.env`. Restart the
+host API after changing those values, or recreate the Compose API and worker.
+See [Account deletion](docs/ACCOUNT_DELETION.md) for the complete setup.
 
 The API and worker containers run as a non-root user with a read-only root
 filesystem, no added Linux capabilities, and `no-new-privileges`. The image

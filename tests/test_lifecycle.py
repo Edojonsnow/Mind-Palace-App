@@ -246,7 +246,7 @@ def test_account_deletion_reconciliation_requeues_due_request(
     assert db_session.get(AccountDeletionRequest, request.id).error_message is None
 
 
-def test_account_deletion_dispatch_failure_preserves_failed_request(
+def test_account_deletion_dispatch_failure_preserves_pending_request(
     client: TestClient,
     db_session: Session,
     monkeypatch,
@@ -258,7 +258,10 @@ def test_account_deletion_dispatch_failure_preserves_failed_request(
 
     response = client.post("/account/deletion")
 
-    assert response.status_code == 503
+    assert response.status_code == 202
     request = db_session.scalar(select(AccountDeletionRequest))
     assert request is not None
-    assert request.status == "failed"
+    assert request.status == "pending"
+    assert request.error_message == "RuntimeError"
+    assert client.get("/account/deletion").json()["status"] == "pending"
+    assert client.delete("/account/deletion").status_code == 204

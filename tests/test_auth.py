@@ -248,15 +248,19 @@ async def test_get_current_user_accepts_signed_session_cookie_from_web_proxy(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "created_at", [None, "not-a-date", "2026-11-25T12:00:00", "2026-11-25T12:00:00Z"],
+)
 async def test_verify_session_token_returns_user_from_neon_session_response(
     monkeypatch: pytest.MonkeyPatch,
+    created_at,
 ) -> None:
     class FakeResponse:
         status_code = 200
 
         def json(self) -> dict[str, object]:
             return {
-                "session": {"userId": "neon-user-123"},
+                "session": {"userId": "neon-user-123", "createdAt": created_at},
                 "user": {"id": "neon-user-123", "email": "alex@example.com"},
             }
 
@@ -292,4 +296,10 @@ async def test_verify_session_token_returns_user_from_neon_session_response(
             ),
     )
 
-    assert user == AuthenticatedUser(auth_user_id="neon-user-123", email="alex@example.com")
+    from datetime import UTC, datetime
+
+    assert user == AuthenticatedUser(
+        auth_user_id="neon-user-123", email="alex@example.com",
+        session_created_at=datetime(2026, 11, 25, 12, tzinfo=UTC)
+        if created_at == "2026-11-25T12:00:00Z" else None,
+    )

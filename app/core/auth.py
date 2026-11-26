@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Annotated
 from urllib.parse import unquote
 
@@ -23,6 +24,7 @@ NEON_AUTH_SESSION_COOKIE_HEADER = "X-Neon-Auth-Session-Cookie"
 class AuthenticatedUser:
     auth_user_id: str
     email: str | None = None
+    session_created_at: datetime | None = None
 
 
 def verify_access_token(token: str, app_settings: Settings = settings) -> AuthenticatedUser:
@@ -142,9 +144,19 @@ async def verify_session_token(
         return None
 
     email = user.get("email")
+    session_created_at = None
+    created_at = session.get("createdAt")
+    if isinstance(created_at, str):
+        try:
+            parsed = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            if parsed.tzinfo is not None:
+                session_created_at = parsed
+        except ValueError:
+            pass
     return AuthenticatedUser(
         auth_user_id=auth_user_id,
         email=email if isinstance(email, str) else None,
+        session_created_at=session_created_at,
     )
 
 

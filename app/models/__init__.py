@@ -16,6 +16,7 @@ from app.models.idempotency import IdempotencyRequest
 from app.models.lifecycle import (
     AccountDeletionRequest,
     AccountDeletionStatus,
+    DeletedAuthIdentity,
     ExportRequest,
     ExportRequestStatus,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "Collection",
     "AccountDeletionRequest",
     "AccountDeletionStatus",
+    "DeletedAuthIdentity",
     "BackgroundJob",
     "BackgroundJobStatus",
     "BackgroundJobType",

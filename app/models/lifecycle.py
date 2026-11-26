@@ -57,3 +57,15 @@ class AccountDeletionRequest(Base):
     purge_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class DeletedAuthIdentity(Base):
+    """Minimal revocation record; contains no raw identity, email or user content."""
+
+    __tablename__ = "deleted_auth_identities"
+
+    auth_id_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    deleted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )

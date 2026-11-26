@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     ask_history_messages: int = 10
     ask_max_context_chars: int = 12000
     recovery_window_days: int = Field(default=60, ge=1)
+    account_deletion_recent_auth_seconds: int = Field(default=600, ge=60, le=3600)
     export_retention_hours: int = 24
     idempotency_retention_hours: int = 24
     neon_api_key: str | None = None
